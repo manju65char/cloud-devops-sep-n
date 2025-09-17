@@ -1,0 +1,317 @@
+# aws intro 
+
+Cloud computing :
+
+what's CLOUD ?
+
+The cloud is a vast infrastructure of computers and servers accessible via the internet, providing services like virtual machines, data storage, and server hosting for tasks such as running applications, data management, security, processing, and web hosting.
+
+
+cloud computing ?
+
+it refers to  data and applications being stored and run on the cloud rather than being stored on local machine or on premises
+
+When we heard first time “Cloud Computing” everyone thinks is it related form real Cloud of Sky and possibly everyone thinks “computing” as calculation or counting ….We think meaning of computing correctly but here meaning of cloud (what we first thinks) approximately not correct here we use of the features of cloud to implement in our technology.
+
+Cloud computing is the on-demand delivery of IT resources and functionality such as Storage of data, easy access of broad range technologies, scaling of resources, Cost savings, Optimization, and deploy globally over the Internet with pay-as-you-go pricing. Instead of buying, owning, and maintaining physical data centers and servers, you can access technology services, such as computing power, storage, and databases, on an as-needed basis from a cloud provider like Amazon Web Services (AWS).
+
+Who is using cloud computing?
+
+
+In this evolving world , organizations of each and every type, size and industry are using cloud for a wide variety of use cases, such as data backup, disaster recovery, email, virtual desktops, software development and testing, big data analytics, and customer-facing web applications. For example,Food delivers companies using cloud to deliver its services. Healthcare companies are using the cloud to develop more personalized treatments for patients. Online market like Amazon, Paytm, Filpkart are using cloud to provide real time experiences market and services to its customer. Edtech company link Unacademy, Byju are also using cloud to provide online education. Financial services companies are using the cloud to power real-time fraud detection and prevention. And video game makers are using the cloud to deliver online games to millions of players around the world.
+
+Benefits of cloud computing
+
+1.Agility
+The cloud gives you easy access to a broad range of technologies so that you can innovate faster and build nearly anything that you can imagine. You can quickly spin up resources as you need them–from infrastructure services, such as compute, storage, and databases, to Internet of Things, machine learning, data lakes and analytics, and much more.
+
+You can deploy technology services in a matter of minutes, and get from idea to implementation several orders of magnitude faster than before. This gives you the freedom to experiment, test new ideas to differentiate customer experiences, and transform your business.
+
+2.Elasticity
+With cloud computing, you don’t have to over-provision resources up front to handle peak levels of business activity in the future. Instead, you provision the amount of resources that you actually need. You can scale these resources up or down to instantly grow and shrink capacity as your business needs change.
+
+3.Cost savings
+The cloud allows you to trade capital expenses (such as data centers and physical servers) for variable expenses, and only pay for IT as you consume it. Plus, the variable expenses are much lower than what you would pay to do it yourself because of the economies of scale.
+
+4.Deploy globally in minutes
+With the cloud, you can expand to new geographic regions and deploy globally in minutes. For example, AWS has infrastructure all over the world, so you can deploy your application in multiple physical locations with just a few clicks. Putting applications in closer proximity to end users reduces latency and improves their experience.
+
+Types of cloud computing
+
+Cloud computing is providing developers and IT departments with the ability to focus on what matters most and avoid undifferentiated work like procurement, maintenance, and capacity planning. As cloud computing has grown in popularity, several different models and deployment strategies have emerged to help meet specific needs of different users. Each type of cloud service, and deployment method, provides you with different levels of control, flexibility, and management. Understanding the differences between Infrastructure as a Service, Platform as a Service, and Software as a Service, as well as what deployment strategies you can use, can help you decide what set of services is right for your needs.
+
+Infrastructure as a Service (IaaS)
+
+IaaS
+
+IaaS contains the basic building blocks for cloud IT. It typically provides access to networking features, computers (virtual or on dedicated hardware), and data storage space. IaaS gives you the highest level of flexibility and management control over your IT resources. It is most similar to the existing IT resources with which many IT departments and developers are familiar.
+
+Platform as a Service (PaaS)
+
+PaaS
+
+PaaS removes the need for you to manage underlying infrastructure (usually hardware and operating systems), and allows you to focus on the deployment and management of your applications. This helps you be more efficient as you don’t need to worry about resource procurement, capacity planning, software maintenance, patching, or any of the other undifferentiated heavy lifting involved in running your application.
+
+Software as a Service (SaaS)
+
+SaaS
+
+SaaS provides you with a complete product that is run and managed by the service provider. In most cases, people referring to SaaS are referring to end-user applications (such as web-based email). With a SaaS offering, you don’t have to think about how the service is maintained or how the underlying infrastructure is managed. You only need to think about how you will use that particular software.
+
+Cloud Computing Deployment Models
+Cloud/Public Cloud
+
+Cloud
+A cloud-based application is fully deployed in the cloud and all parts of the application run in the cloud. Applications in the cloud have either been created in the cloud or have been migrated from an existing infrastructure to take advantage of the benefits of cloud Computing. Cloud-based applications can be built on low-level infrastructure pieces or can use higher level services that provide abstraction from the management, architecting, and scaling requirements of core infrastructure.
+
+Public clouds are ideal for small and medium sized businesses with a tight budget requiring a quick and easy platform in which to deploy IT resources.
+
+Pros of a public cloud
+
+Easy scalability
+No geographical restrictions
+Cost effective
+Highly reliable
+Easy to manage
+Cons of a public cloud
+
+Not considered the safest option for sensitive data
+Hybrid Cloud
+
+Hybrid
+A hybrid deployment is a way to connect infrastructure and applications between cloud-based resources and existing resources that are not located in the cloud. The most common method of hybrid deployment is between the cloud and existing on-premises infrastructure to extend, and grow, an organization’s infrastructure into the cloud while connecting cloud resources to internal system.
+
+Pros of a hybrid cloud
+
+Highly flexible and scalable
+Cost effective
+Enhanced security
+Cons of a hybrid cloud
+
+Communication in network level may be conflicted as it’s used in both private and public clouds.
+On-premises/Private Cloud
+
+On-permises
+Deploying resources on-premises, using virtualization and resource management tools, is sometimes called “private cloud”. On-premises deployment does not provide many of the benefits of cloud computing but is sometimes sought for its ability to provide dedicated resources. In most cases this deployment model is the same as legacy IT infrastructure while using application management and virtualization technologies to try and increase resource utilization.
+
+Pros of a private cloud
+
+Improved level of security
+Greater control over the server
+Customisable
+Cons of a private cloud
+
+Harder to access data from remote locations
+Requires IT expertise
+
+What is AWS?
+
+o AWS stands for Amazon Web Services.
+
+o The AWS service is provided by the Amazon that uses distributed IT infrastructure to provide different IT
+resources available on demand. It provides different services such as infrastructure as a service (IaaS),
+platform as a service (PaaS) and packaged software as a service (SaaS).
+
+
+
+Uses of AWS
+
+o A small manufacturing organization uses their expertise to expand their business by leaving their IT
+management to the AWS.
+
+o A large enterprise spread across the globe can utilize the AWS to deliver the training to the distributed
+workforce.
+
+o An architecture consulting company can use AWS to get the high-compute rendering of construction
+prototype.
+
+o A media company can use the AWS to provide different types of content such as ebox or audio files to the
+worldwide files.
+
+AWS (Amazon Web Services) different domains in which AWS offer services:
+• Compute
+It is used to process data on the cloud by making use of powerful processors which serve multiple instances
+at a time.
+
+• Storage and Content Delivery
+
+The storage as the name suggests, is used to store data in the cloud, this data can be stored anywhere but
+content delivery on the other hand is used to cache data nearer to the user so as to provide low latency.
+
+• Database
+The database domain is used to provide reliable relational and non-relational database instances managed
+by AWS.
+
+• Networking
+It includes services which provide a variety of networking features such as security, faster access etc.
+
+• Management Tools
+It includes services which can be used to manage and monitor your AWS instances.
+
+• Security and Identity
+It includes services for user authentication or limiting access to a certain set of audience on your AWS
+resources.
+
+• Application Services
+It includes simple services like notifications, emailing and queuing.
+
+
+AWS GLOBAL INFRASTRUCTURE
+
+It’s majorly stand with Region, Availability zones and Edge locations.
+
+Region:
+
+A region is a geographic location which host two or more availability zones. Each region has
+minimum of two availability zones.
+
+In cloud computing, a region refers to a physical location where cloud providers have their data
+centers. Each region contains multiple data centers that are geographically distributed to ensure
+redundancy and high availability. Regions are usually named after the geographic area they serve,
+such as "US-East," "Europe," or "Asia-Pacific."
+
+Example : AWS Regions in India:
+
+ Asia Pacific (Mumbai)
+ Asia Pacific (Hyderabad)
+ 
+AWS has 25 regions globally
+
+1. US East (N. Virginia)
+2. US East (Ohio)
+3. US West (N. California)
+4. US West (Oregon)
+5. Canada (Central)
+6. South America (São Paulo)
+7. EU (Ireland)
+8. EU (Frankfurt)
+9. EU (London)
+10.EU (Paris)
+11.EU (Stockholm)
+12.Middle East (Bahrain)
+13.Asia Pacific (Hong Kong)
+14.Asia Pacific (Mumbai)
+15.Asia Pacific (Osaka-Local)
+16.Asia Pacific (Seoul)
+17.Asia Pacific (Singapore)
+18.Asia Pacific (Sydney)
+19.Asia Pacific (Tokyo)
+20.Africa (Cape Town)
+21.Europe (Milan)
+22.Europe (Zurich)
+23.GovCloud (US-East)
+24.GovCloud (US-West)
+25.China (Beijing)
+
+Availability zones:
+
+Availability zones are collection of data centers with in a region.
+These are isolated data centers within a region that are designed to be independent of each other in
+terms of power supply , cooling equipments , and network connectivity and backup
+generation .these all availbilty zones are logically connected each other in a particular region
+The idea behind availability zones is to ensure that if one zone goes down, the other zones in the
+region can continue to function. AZs are typically located in close proximity to one another to
+minimize latency and increase fault tolerance.
+
+Example: Availability Zones in India:
+
+ A. Asia Pacific (Mumbai):
+✗ ap-south-1a
+✗ ap-south-1b
+✗ ap-south-1c
+✗ ap-south-1d
+✗ ap-south-1e
+✗ ap-south-1f
+ B. Asia Pacific (Hyderabad):
+✗ ap-hyderabad-1a
+✗ ap-hyderabad-1b
+ ap-hyderabad-1c
+ 
+Edge locations:
+
+an edge loction is whrere end user access services located at AWS. They are located in most of the major ciites around the world and are specifically used by Cloud Front(CDN) to distribute content to ende user to reduce latency.
+
+AWS has over 250 edge locations globally, which are part of Amazon's Content Delivery Network
+(CDN). Edge locations are smaller data centers that are located closer to end-users, and they cache
+frequently accessed data and content to reduce latency and improve performance. They are typically
+used for serving static content, such as images, videos, and other files.
+
+AWS Edge Locations in India:
+• Mumbai
+• Chennai
+• New Delhi
+• Hyderabad
+• Kolkata
+• Bangalore
+
+================================================================================================================================
+
+
+Types of EBS Volumes
+AWS offers different types of EBS volumes, each optimized for different use cases:
+
+General Purpose SSD (gp3 and gp2):
+
+Purpose: Ideal for a wide range of workloads, including boot volumes, medium-size databases, and development/test environments.
+Performance: Balances price and performance.
+gp3: Provides baseline performance with the option to provision additional IOPS (input/output operations per second) and throughput.
+gp2: Provides baseline performance with burst capabilities for handling spikes in traffic.
+Use Case: Hosting the root filesystem of a web application, storing medium-sized databases, etc.
+Provisioned IOPS SSD (io1 and io2):
+
+Purpose: Designed for critical, I/O-intensive workloads requiring consistent, low-latency performance.
+Performance: High-performance with configurable IOPS.
+io2: Offers higher durability and performance than io1.
+Use Case: Large relational databases like Oracle, SQL Server, or high-performance NoSQL databases like Cassandra.
+Throughput Optimized HDD (st1):
+
+Purpose: Suitable for large, sequential workloads requiring high throughput.
+Performance: Designed for throughput-oriented workloads with lower IOPS requirements.
+Use Case: Big data, data warehousing, and log processing.
+Cold HDD (sc1):
+
+Purpose: Best suited for infrequently accessed data with low cost.
+Performance: Low-cost storage with lower performance.
+Use Case: Archiving, backup storage, and infrequent access workloads.
+Magnetic (Standard):
+
+Purpose: Legacy magnetic storage type, suitable for infrequently accessed data.
+Performance: Low-performance magnetic storage.
+Use Case: Deprecated in favor of newer types like sc1, but previously used for cold storage.
+Real-Time Example
+Example Application: A Web-Based E-Commerce Platform
+
+Imagine you are running a large-scale e-commerce platform hosted on AWS. The application architecture consists of multiple components like a web server, database server, and a data analytics engine.
+
+General Purpose SSD (gp3): You use gp3 volumes for the root filesystem of your web server instances. This gives you a good balance between cost and performance, ensuring that the web application remains responsive to user requests.
+
+Provisioned IOPS SSD (io2): The backend database (e.g., MySQL or PostgreSQL) that handles transactions and customer data is stored on io2 volumes. This ensures that the database can handle a high volume of read/write operations efficiently, providing low-latency access to critical data.
+
+Throughput Optimized HDD (st1): For the data analytics engine that processes large log files and customer interaction data, st1 volumes are used. This type of volume is ideal for handling the sequential read/write operations involved in big data processing.
+
+Cold HDD (sc1): Backups and archival data (e.g., old transaction logs and user history) are stored on sc1 volumes. Since this data is rarely accessed, sc1 provides a cost-effective solution.
+
+Purpose of EBS
+Data Persistence: EBS volumes provide persistent storage that continues to exist independently of the EC2 instances they are attached to. This is crucial for maintaining data integrity and ensuring that important data is not lost when instances are stopped or terminated.
+
+Scalability: EBS volumes can be resized and reconfigured to meet changing performance and storage requirements without downtime.
+
+High Availability and Durability: EBS volumes are designed to be highly available and durable. They are automatically replicated within an Availability Zone to protect against hardware failures.
+
+Flexibility: EBS volumes can be easily attached, detached, and moved between EC2 instances, providing flexibility in how resources are allocated.
+
+Application Use Case: Database Management System (DBMS)
+For a database management system like PostgreSQL:
+
+Storage: A Provisioned IOPS SSD (io2) EBS volume is used to store the database files. This ensures that the database can handle high IOPS requirements, providing low latency and high throughput for read/write operations.
+
+Backup: Daily backups of the database are stored on a Cold HDD (sc1) EBS volume, reducing storage costs while still retaining important historical data.
+
+Log Processing: Throughput Optimized HDD (st1) volumes are used to store database logs, which are periodically analyzed for performance tuning and auditing purposes.
+
+============================
+
+
+
+
+
