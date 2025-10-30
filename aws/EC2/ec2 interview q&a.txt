@@ -1,0 +1,1482 @@
+1. How would you handle a situation where an EC2 instance becomes unreachable but appears running in the console?
+Answer: I would follow this systematic approach:
+
+Check Security Group rules for port 22/3389/custom application ports
+Verify NACL (Network ACL) rules at subnet level
+Check OS-level firewall (iptables/Windows Firewall) via Serial Console or Systems Manager
+Review CloudWatch metrics for CPU steal time, network in/out
+Check if instance has public IP/Elastic IP attached
+Use EC2 Instance Connect or Systems Manager Session Manager as alternative access
+Review system logs via EC2 console → Actions → Monitor and troubleshoot → Get system log
+
+Example: Production web server became unreachable. Found that a junior engineer modified the Security Group, removing port 443. Restored the rule and documented the change in change management system.
+
+2. Your application requires guaranteed network performance. Which EC2 feature would you use?
+Answer: I would use Enhanced Networking with Elastic Network Adapter (ENA) or Intel 82599 VF interface:
+
+Enable ENA for up to 100 Gbps bandwidth
+Use Cluster Placement Groups for low-latency, high-throughput
+Choose network-optimized instance types (e.g., c5n.18xlarge)
+Enable ENA Express for further performance improvement
+
+Example: For a high-frequency trading application, I deployed c5n.9xlarge instances with ENA enabled in a Cluster Placement Group, achieving sub-millisecond latency between instances.
+
+3. How do you implement automatic recovery for EC2 instances experiencing system status check failures?
+Answer: Multiple approaches:
+
+CloudWatch Alarms with Auto Recovery:
+
+bashaws cloudwatch put-metric-alarm \
+  --alarm-name recover-instance \
+  --alarm-actions arn:aws:automate:region:ec2:recover \
+  --statistic Maximum \
+  --threshold 0 \
+  --comparison-operator GreaterThanThreshold \
+  --metric-name StatusCheckFailed_System \
+  --namespace AWS/EC2 \
+  --period 60 \
+  --evaluation-periods 2
+
+ASG with health checks
+AWS Lambda + EventBridge for custom recovery logic
+
+Example: Database server had intermittent hardware failures. Implemented CloudWatch alarm that automatically recovered the instance, maintaining the same private IP and EBS volumes.
+
+4. Explain your strategy for right-sizing EC2 instances in a production environment.
+Answer: Comprehensive right-sizing approach:
+
+Data Collection (30-90 days):
+
+Enable CloudWatch detailed monitoring
+Use AWS Compute Optimizer
+Collect custom metrics via CloudWatch agent
+
+
+Analysis:
+
+CPU utilization (target 40-70%)
+Memory usage (requires CloudWatch agent)
+Network throughput
+Disk I/O patterns
+Peak vs. average usage
+
+
+Implementation:
+
+Test in dev/staging first
+Use instance resize during maintenance window
+Implement gradually with blue-green deployment
+
+
+
+Example: Reduced costs by 40% by downsizing t3.2xlarge instances to t3.large after analyzing 60 days of metrics showing <20% average CPU usage.
+
+5. How would you migrate a fleet of 500+ EC2 instances from one AWS region to another with minimal downtime?
+Answer: Phased migration strategy:
+Phase 1 - Preparation:
+
+AMI creation and copying to target region
+VPC setup, Security Groups, IAM roles replication
+Database replication setup (DMS/native replication)
+
+Phase 2 - Data Migration:
+
+EBS snapshot copy to target region
+S3 cross-region replication
+Database continuous replication
+
+Phase 3 - Application Migration:
+
+Launch instances from AMIs in target region
+Update Route53 with weighted routing (10% traffic initially)
+Gradually increase traffic to new region
+Keep source region running for rollback
+
+Example: Migrated e-commerce platform from us-east-1 to eu-west-1 for GDPR compliance, using Route53 weighted routing over 2 weeks, achieving zero customer-facing downtime.
+
+6. What's your approach to securing EC2 instances from the moment they launch?
+Answer: Defense-in-depth security approach:
+1. Launch Template Security:
+json{
+  "UserData": "#!/bin/bash\nyum update -y\nsystemctl enable sshd\nsed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config",
+  "MetadataOptions": {
+    "HttpTokens": "required",
+    "HttpPutResponseHopLimit": 1
+  }
+}
+2. Security Layers:
+
+IMDSv2 enforcement
+No SSH keys in production (use SSM Session Manager)
+Security Groups with least privilege
+Separate subnets for different tiers
+Enable EBS encryption by default
+AWS Systems Manager for patch management
+Inspector for vulnerability scanning
+GuardDuty for threat detection
+
+Example: Eliminated SSH key sprawl by enforcing SSM Session Manager, reducing security incidents by 80%.
+
+7. How do you handle EBS volume performance issues in production?
+Answer: Systematic troubleshooting:
+1. Identify bottleneck:
+bash# Check IOPS and throughput
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/EBS \
+  --metric-name VolumeReadOps \
+  --dimensions Name=VolumeId,Value=vol-xxxxx \
+  --start-time 2025-10-29T00:00:00Z \
+  --end-time 2025-10-30T00:00:00Z \
+  --period 3600 \
+  --statistics Average
+2. Solutions:
+
+Check for burst balance exhaustion (gp2 volumes)
+Upgrade to gp3 with custom IOPS/throughput
+Migrate to io2 Block Express for mission-critical
+Enable EBS-optimized instances
+Use instance store for temporary data
+Implement RAID 0 for higher throughput
+
+Example: Database experiencing slow queries. Found gp2 volume burst credits depleted. Migrated to gp3 with 16,000 IOPS provisioned, improving query performance by 5x.
+
+8. Describe your disaster recovery strategy for EC2-based applications.
+Answer: Multi-tier DR strategy based on RTO/RPO:
+Tier 1 - Critical (RTO: <1hr, RPO: <15min):
+
+Multi-AZ deployment with Auto Scaling
+Cross-region AMI/snapshot replication
+Route53 health checks with failover
+Database synchronous replication
+
+Tier 2 - Important (RTO: 4hrs, RPO: 1hr):
+
+Automated backup to S3
+Daily AMI snapshots
+Infrastructure as Code (Terraform/CloudFormation)
+Pilot light in DR region
+
+Tier 3 - Standard (RTO: 24hrs, RPO: 24hrs):
+
+Weekly backups
+Backup & restore strategy
+
+Implementation:
+bash# Automated snapshot script
+aws dlm create-lifecycle-policy \
+  --execution-role-arn arn:aws:iam::account:role/DLMRole \
+  --description "Daily snapshots" \
+  --state ENABLED \
+  --policy-details file://policy.json
+Example: During AWS region outage, failed over payment processing system to secondary region in 45 minutes using pre-created AMIs and automated failover scripts.
+
+9. How do you optimize EC2 costs for variable workloads?
+Answer: Multi-pronged cost optimization:
+1. Instance Purchasing Strategy:
+
+Reserved Instances (1-3 years) for baseline: 40% of capacity
+Savings Plans for flexibility: 30% of capacity
+Spot Instances for fault-tolerant workloads: 20% of capacity
+On-Demand for spikes: 10% of capacity
+
+2. Automation:
+python# Lambda to stop dev instances after hours
+import boto3
+from datetime import datetime
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+    filters = [{'Name': 'tag:Environment', 'Values': ['dev']}]
+    instances = ec2.describe_instances(Filters=filters)
+    
+    for reservation in instances['Reservations']:
+        for instance in reservation['Instances']:
+            if instance['State']['Name'] == 'running':
+                ec2.stop_instances(InstanceIds=[instance['InstanceId']])
+3. Architectural Patterns:
+
+Use Lambda for sporadic tasks
+Implement auto-scaling with proper metrics
+Schedule start/stop for non-prod environments
+Use Graviton instances (40% cost saving)
+
+Example: Reduced monthly EC2 costs from $45K to $22K by implementing 60% Reserved Instances, Spot for batch jobs, and auto-shutdown of dev environments.
+
+10. How would you troubleshoot an EC2 instance stuck in "stopping" state?
+Answer: Step-by-step troubleshooting:
+1. Check Instance State Reason:
+bashaws ec2 describe-instances --instance-ids i-xxxxx \
+  --query 'Reservations[].Instances[].StateReason'
+2. Common Causes & Solutions:
+
+Attached EBS volumes with DeleteOnTermination=false: Detach manually
+ENI detachment issues: Force detach network interface
+Shutdown script hangs: Use force stop after 10 minutes
+EC2 service issue: Wait or contact AWS Support
+
+3. Force Stop:
+bashaws ec2 stop-instances --instance-ids i-xxxxx --force
+4. Nuclear Option:
+If stuck >20 minutes, create AMI and terminate:
+bashaws ec2 create-image --instance-id i-xxxxx --name "recovery-ami"
+aws ec2 terminate-instances --instance-ids i-xxxxx
+Example: Jenkins master stuck in stopping state for 15 minutes. Found additional ENI attached. Force-detached ENI, then successfully stopped instance.
+
+11. Explain your approach to implementing zero-downtime updates for EC2-based applications.
+Answer: Blue-Green deployment with ALB:
+Strategy:
+
+Infrastructure Setup:
+
+Two Auto Scaling Groups (Blue=current, Green=new)
+Application Load Balancer with two target groups
+Route53 weighted routing records
+
+
+Deployment Process:
+
+bash# Step 1: Launch Green environment
+aws autoscaling create-auto-scaling-group \
+  --auto-scaling-group-name app-green \
+  --launch-template LaunchTemplateId=lt-new-version \
+  --target-group-arns arn:aws:elasticloadbalancing:...:targetgroup/app-green
+
+# Step 2: Shift 10% traffic
+aws elbv2 modify-listener \
+  --listener-arn arn:aws:elasticloadbalancing:... \
+  --default-actions Type=forward,ForwardConfig='{
+    "TargetGroups": [
+      {"TargetGroupArn": "blue-tg", "Weight": 90},
+      {"TargetGroupArn": "green-tg", "Weight": 10}
+    ]
+  }'
+
+# Step 3: Monitor, gradually increase to 100%
+# Step 4: Terminate Blue ASG
+Example: Updated e-commerce platform serving 10K RPS without downtime. Gradually shifted traffic over 1 hour while monitoring error rates and latency.
+
+12. How do you manage SSH keys across 1000+ EC2 instances?
+Answer: Modern approach - eliminate SSH keys entirely:
+1. AWS Systems Manager Session Manager:
+bash# No SSH keys needed
+aws ssm start-session --target i-xxxxx
+
+# Port forwarding for applications
+aws ssm start-session --target i-xxxxx \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["3306"],"localPortNumber":["3306"]}'
+Benefits:
+
+No SSH key management
+Full audit trail in CloudTrail
+IAM-based access control
+No bastion hosts needed
+No inbound security group rules
+
+2. Fallback - Centralized Key Management:
+
+Store keys in AWS Secrets Manager
+Rotate keys automatically every 90 days
+Use AWS Systems Manager to distribute keys
+Implement HashiCorp Vault for dynamic credentials
+
+Example: Migrated 1200 instances from SSH key authentication to SSM Session Manager, eliminating security incidents related to compromised keys and reducing operational overhead by 70%.
+
+13. What's your strategy for handling EC2 instance retirement notifications?
+Answer: Automated remediation workflow:
+1. EventBridge Rule:
+json{
+  "source": ["aws.health"],
+  "detail-type": ["AWS Health Event"],
+  "detail": {
+    "service": ["EC2"],
+    "eventTypeCategory": ["scheduledChange"]
+  }
+}
+2. Lambda Function Response:
+pythondef lambda_handler(event, context):
+    instance_id = event['detail']['affectedEntities'][0]['entityValue']
+    
+    # Option 1: Stop and Start (for instances with EBS root)
+    ec2.stop_instances(InstanceIds=[instance_id])
+    waiter = ec2.get_waiter('instance_stopped')
+    waiter.wait(InstanceIds=[instance_id])
+    ec2.start_instances(InstanceIds=[instance_id])
+    
+    # Option 2: ASG instances - terminate and let ASG replace
+    # Option 3: Create AMI, launch new, update DNS
+3. Notification:
+
+SNS alert to ops team
+Slack notification with remediation status
+Create JIRA ticket for tracking
+
+Example: Received retirement notice for 15 database replicas. Automated Lambda function stop/started instances during maintenance window, avoiding manual intervention.
+
+14. How do you implement custom metrics for EC2 instances?
+Answer: CloudWatch Agent with custom metrics:
+1. CloudWatch Agent Configuration:
+json{
+  "metrics": {
+    "namespace": "CustomApp",
+    "metrics_collected": {
+      "mem": {
+        "measurement": [
+          {"name": "mem_used_percent", "rename": "MemoryUsed", "unit": "Percent"}
+        ],
+        "metrics_collection_interval": 60
+      },
+      "disk": {
+        "measurement": [
+          {"name": "used_percent", "rename": "DiskUsed", "unit": "Percent"}
+        ],
+        "resources": ["*"],
+        "metrics_collection_interval": 60
+      },
+      "processes": {
+        "measurement": [
+          "running",
+          "sleeping",
+          "dead"
+        ]
+      }
+    }
+  }
+}
+2. Application Metrics:
+bash# Push custom metric via CLI
+aws cloudwatch put-metric-data \
+  --namespace CustomApp \
+  --metric-name OrdersProcessed \
+  --value 1000 \
+  --timestamp 2025-10-30T12:00:00Z
+3. StatsD/DogStatsD Integration:
+pythonfrom datadog import statsd
+statsd.increment('orders.processed', tags=['env:prod'])
+Example: Implemented custom metrics for Java application tracking JVM heap usage, garbage collection time, and request queue depth. Created CloudWatch alarms that scaled ASG based on queue depth.
+
+15. Describe your approach to patching 500 EC2 instances with zero downtime.
+Answer: AWS Systems Manager Patch Manager with rolling updates:
+1. Setup Maintenance Windows:
+bashaws ssm create-maintenance-window \
+  --name "PatchingWindow" \
+  --schedule "cron(0 2 ? * SUN *)" \
+  --duration 4 \
+  --cutoff 1 \
+  --allow-unassociated-targets
+2. Create Patch Baseline:
+bashaws ssm create-patch-baseline \
+  --name "Production-Baseline" \
+  --operating-system AMAZON_LINUX_2 \
+  --approval-rules "PatchRules=[{
+    PatchFilterGroup={PatchFilters=[
+      {Key=CLASSIFICATION,Values=[Security,Bugfix]},
+      {Key=SEVERITY,Values=[Critical,Important]}
+    ]},
+    ApprovalAfterDays=7
+  }]"
+3. Rolling Update Strategy:
+
+Behind ALB: 20% of instances at a time
+Wait for health checks to pass
+Monitor CloudWatch alarms
+Automatic rollback on failures
+
+4. Process:
+bash# Scan for patches
+aws ssm send-command \
+  --document-name "AWS-RunPatchBaseline" \
+  --targets "Key=tag:Environment,Values=Production" \
+  --parameters "Operation=Scan"
+
+# Install patches in rolling manner
+aws ssm send-command \
+  --document-name "AWS-RunPatchBaseline" \
+  --targets "Key=tag:PatchGroup,Values=Group1" \
+  --max-concurrency "20%" \
+  --max-errors "5%" \
+  --parameters "Operation=Install,RebootOption=RebootIfNeeded"
+Example: Patched 600-instance web farm over 4 Sunday maintenance windows, 150 instances per window with 20% concurrency, achieving 100% patch compliance without customer impact.
+
+16. How would you implement instance metadata protection (IMDSv2)?
+Answer: Enforce IMDSv2 organization-wide:
+1. Launch Template Enforcement:
+json{
+  "MetadataOptions": {
+    "HttpTokens": "required",
+    "HttpPutResponseHopLimit": 1,
+    "HttpEndpoint": "enabled"
+  }
+}
+2. Modify Existing Instances:
+bash# Audit current state
+aws ec2 describe-instances \
+  --query 'Reservations[].Instances[].[InstanceId,MetadataOptions.HttpTokens]' \
+  --output table
+
+# Enforce IMDSv2
+aws ec2 modify-instance-metadata-options \
+  --instance-id i-xxxxx \
+  --http-tokens required \
+  --http-put-response-hop-limit 1
+3. SCP Policy (Preventive):
+json{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Deny",
+    "Action": "ec2:RunInstances",
+    "Resource": "arn:aws:ec2:*:*:instance/*",
+    "Condition": {
+      "StringNotEquals": {
+        "ec2:MetadataHttpTokens": "required"
+      }
+    }
+  }]
+}
+4. Update Application Code:
+python# Old (IMDSv1)
+token = requests.get('http://169.254.169.254/latest/meta-data/ami-id').text
+
+# New (IMDSv2)
+token = requests.put('http://169.254.169.254/latest/api/token',
+                     headers={'X-aws-ec2-metadata-token-ttl-seconds': '21600'}).text
+ami_id = requests.get('http://169.254.169.254/latest/meta-data/ami-id',
+                      headers={'X-aws-ec2-metadata-token': token}).text
+Example: Enforced IMDSv2 across 2000 instances, preventing SSRF vulnerabilities. Identified 50 legacy applications requiring code updates using CloudWatch Logs analysis.
+
+17. What's your strategy for handling EC2 instance store data during instance stops/starts?
+Answer: Instance store is ephemeral - strategies depend on data type:
+1. Temporary/Cache Data:
+
+No action needed - regenerate on boot
+Use Redis/Memcached instead
+
+2. Important Data:
+bash#!/bin/bash
+# Backup script in /etc/cron.hourly/instance-store-backup
+
+INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Sync to S3
+aws s3 sync /mnt/instance-store/ \
+  s3://backup-bucket/${INSTANCE_ID}/${TIMESTAMP}/ \
+  --storage-class INTELLIGENT_TIERING
+3. Boot-time Recovery:
+bash# In user-data
+#!/bin/bash
+INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)
+LATEST_BACKUP=$(aws s3 ls s3://backup-bucket/${INSTANCE_ID}/ | tail -1 | awk '{print $2}')
+
+aws s3 sync s3://backup-bucket/${INSTANCE_ID}/${LATEST_BACKUP} \
+  /mnt/instance-store/
+4. Architectural Alternative:
+
+Use EBS instead of instance store
+Use EFS for shared file storage
+Implement distributed caching (Redis Cluster)
+
+Example: Video transcoding application used instance store for temporary files. Implemented automatic cleanup of files older than 24 hours and S3 sync for incomplete jobs before instance termination.
+
+18. How do you implement auto-scaling based on custom application metrics?
+Answer: Target Tracking with custom CloudWatch metrics:
+1. Publish Custom Metric:
+python# Application code
+import boto3
+cloudwatch = boto3.client('cloudwatch')
+
+def publish_queue_depth(depth):
+    cloudwatch.put_metric_data(
+        Namespace='CustomApp',
+        MetricData=[{
+            'MetricName': 'QueueDepth',
+            'Value': depth,
+            'Unit': 'Count',
+            'Timestamp': datetime.utcnow()
+        }]
+    )
+2. Create Scaling Policy:
+bashaws autoscaling put-scaling-policy \
+  --auto-scaling-group-name my-asg \
+  --policy-name scale-on-queue-depth \
+  --policy-type TargetTrackingScaling \
+  --target-tracking-configuration '{
+    "CustomizedMetricSpecification": {
+      "MetricName": "QueueDepth",
+      "Namespace": "CustomApp",
+      "Statistic": "Average"
+    },
+    "TargetValue": 100.0
+  }'
+3. Step Scaling for Aggressive Response:
+bashaws autoscaling put-scaling-policy \
+  --auto-scaling-group-name my-asg \
+  --policy-name step-scale-out \
+  --policy-type StepScaling \
+  --adjustment-type PercentChangeInCapacity \
+  --metric-aggregation-type Average \
+  --step-adjustments '[
+    {"MetricIntervalLowerBound":0,"MetricIntervalUpperBound":10,"ScalingAdjustment":10},
+    {"MetricIntervalLowerBound":10,"MetricIntervalUpperBound":20,"ScalingAdjustment":20},
+    {"MetricIntervalLowerBound":20,"ScalingAdjustment":30}
+  ]'
+Example: Order processing system scaled based on RabbitMQ queue depth. During Black Friday, ASG automatically scaled from 10 to 150 instances, handling 10x normal load without manual intervention.
+
+19. Explain your approach to troubleshooting high CPU steal time on EC2 instances.
+Answer: CPU steal time indicates hypervisor contention:
+1. Identify Issue:
+bash# Check CloudWatch metric
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/EC2 \
+  --metric-name CPUUtilization \
+  --dimensions Name=InstanceId,Value=i-xxxxx \
+  --start-time 2025-10-29T00:00:00Z \
+  --end-time 2025-10-30T00:00:00Z \
+  --period 300 \
+  --statistics Average
+
+# Check steal time from OS
+top -b -n 1 | grep "Cpu(s)" | awk '{print $8}'
+# or
+mpstat 1 10 | grep "Average" | awk '{print $9}'
+2. Root Causes:
+
+Noisy neighbor (other VMs on same host)
+Instance type too small (T2/T3 burst exhaustion)
+Underlying hardware degradation
+
+3. Solutions:
+bash# Option 1: Stop and start (migrates to new hardware)
+aws ec2 stop-instances --instance-ids i-xxxxx
+aws ec2 start-instances --instance-ids i-xxxxx
+
+# Option 2: Use dedicated instances/hosts
+aws ec2 run-instances \
+  --instance-type m5.large \
+  --tenancy dedicated \
+  ...
+
+# Option 3: Upgrade instance type
+aws ec2 modify-instance-attribute \
+  --instance-id i-xxxxx \
+  --instance-type m5.xlarge
+4. Preventive Measures:
+
+Use current generation instances (M5/C5/R5)
+Avoid overloading CPU credits on burstable instances
+Use dedicated tenancy for predictable performance
+Monitor steal time via CloudWatch
+
+Example: Database server showing 30% CPU steal during peak hours. Stop/started instance twice before AWS migrated to different hardware. Steal time dropped to <2%, query performance improved 40%.
+
+20. How do you implement graceful shutdown for EC2 instances in an ASG?
+Answer: Lifecycle hooks with graceful termination:
+1. Create Lifecycle Hook:
+bashaws autoscaling put-lifecycle-hook \
+  --lifecycle-hook-name graceful-shutdown \
+  --auto-scaling-group-name my-asg \
+  --lifecycle-transition autoscaling:EC2_INSTANCE_TERMINATING \
+  --heartbeat-timeout 300 \
+  --default-result CONTINUE
+2. Lambda Function for Graceful Shutdown:
+pythonimport boto3
+
+def lambda_handler(event, context):
+    instance_id = event['detail']['EC2InstanceId']
+    lifecycle_hook_name = event['detail']['LifecycleHookName']
+    asg_name = event['detail']['AutoScalingGroupName']
+    
+    # Deregister from load balancer targets
+    elbv2 = boto3.client('elbv2')
+    elbv2.deregister_targets(
+        TargetGroupArn='arn:aws:elasticloadbalancing:...',
+        Targets=[{'Id': instance_id}]
+    )
+    
+    # Wait for connection draining (sleep 60s)
+    time.sleep(60)
+    
+    # Run custom shutdown script via SSM
+    ssm = boto3.client('ssm')
+    ssm.send_command(
+        InstanceIds=[instance_id],
+        DocumentName='AWS-RunShellScript',
+        Parameters={'commands': [
+            'systemctl stop myapp',
+            'wait_for_connections_to_close.sh'
+        ]}
+    )
+    
+    # Complete lifecycle action
+    asg = boto3.client('autoscaling')
+    asg.complete_lifecycle_action(
+        LifecycleHookName=lifecycle_hook_name,
+        AutoScalingGroupName=asg_name,
+        InstanceId=instance_id,
+        LifecycleActionResult='CONTINUE'
+    )
+3. EventBridge Rule:
+json{
+  "source": ["aws.autoscaling"],
+  "detail-type": ["EC2 Instance-terminate Lifecycle Action"],
+  "detail": {
+    "AutoScalingGroupName": ["my-asg"]
+  }
+}
+Example: Payment processing service needed to complete in-flight transactions before termination. Implemented lifecycle hook with 5-minute timeout, allowing transactions to complete and preventing data loss.
+
+21. What's your strategy for managing EC2 instances across multiple AWS accounts?
+Answer: Centralized management using AWS Organizations and automation:
+1. Architecture:
+
+AWS Organizations with OUs (Dev, Staging, Prod)
+AWS Control Tower for account governance
+Centralized logging to Security account
+AWS Systems Manager for cross-account management
+
+2. Cross-Account Systems Manager:
+bash# Setup resource data sync
+aws ssm create-resource-data-sync \
+  --sync-name "CentralizedInventory" \
+  --s3-destination '{
+    "BucketName": "central-inventory-bucket",
+    "Region": "us-east-1"
+  }'
+
+# Query inventory across accounts
+aws ssm get-inventory \
+  --filters Key=AWS:InstanceInformation.InstanceId,Values=* \
+  --aggregators '[{
+    "Expression": "AWS:InstanceInformation.PlatformType",
+    "Aggregators": [],
+    "Groups": [{"Name": "AWS:InstanceInformation.InstanceId"}]
+  }]'
+3. Centralized Automation:
+python# Lambda in master account for cross-account operations
+import boto3
+
+def assume_role(account_id, role_name):
+    sts = boto3.client('sts')
+    response = sts.assume_role(
+        RoleArn=f'arn:aws:iam::{account_id}:role/{role_name}',
+        RoleSessionName='CentralizedManagement'
+    )
+    return boto3.Session(
+        aws_access_key_id=response['Credentials']['AccessKeyId'],
+        aws_secret_access_key=response['Credentials']['SecretAccessKey'],
+        aws_session_token=response['Credentials']['SessionToken']
+    )
+
+def stop_dev_instances_all_accounts(account_ids):
+    for account_id in account_ids:
+        session = assume_role(account_id, 'DevOpsAutomationRole')
+        ec2 = session.client('ec2')
+        
+        instances = ec2.describe_instances(
+            Filters=[{'Name': 'tag:Environment', 'Values': ['dev']}]
+        )
+        
+        for reservation in instances['Reservations']:
+            for instance in reservation['Instances']:
+                if instance['State']['Name'] == 'running':
+                    ec2.stop_instances(InstanceIds=[instance['InstanceId']])
+4. Tagging Strategy:
+json{
+  "Account": "prod-app-123456789012",
+  "Environment": "production",
+  "Application": "web-app",
+  "CostCenter": "engineering",
+  "Owner": "team-alpha",
+  "Compliance": "pci-dss"
+}
+Example: Managed 3000+ instances across 25 AWS accounts using Systems Manager, reducing operational overhead by 60% through centralized patching, inventory, and compliance reporting.
+
+22. How do you handle EC2 instances that are running but not responsive (zombie instances)?
+Answer: Multi-layered detection and remediation:
+1. Detection Mechanisms:
+bash# CloudWatch Alarm for application health
+aws cloudwatch put-metric-alarm \
+  --alarm-name app-not-responding \
+  --alarm-actions arn:aws:sns:region:account:ops-team \
+  --metric-name HealthCheckStatus \
+  --namespace CustomApp \
+  --statistic Minimum \
+  --period 60 \
+  --evaluation-periods 3 \
+  --threshold 1 \
+  --comparison-operator LessThanThreshold
+
+# Status checks
+aws cloudwatch put-metric-alarm \
+  --alarm-name instance-status-check-failed \
+  --alarm-actions arn:aws:automate:region:ec2:reboot \
+  --metric-name StatusCheckFailed_Instance \
+  --namespace AWS/EC2 \
+  --statistic Maximum \
+  --period 60 \
+  --evaluation-periods 2 \
+  --threshold 0 \
+  --comparison-operator GreaterThanThreshold
+2. Automated Recovery:
+python# Lambda function triggered by CloudWatch alarm
+def lambda_handler(event, context):
+    instance_id = extract_instance_from_alarm(event)
+    
+    # Try reboot first
+    ec2.reboot_instances(InstanceIds=[instance_id])
+    time.sleep(120)
+    
+    # Check if recovered
+    if not check_instance_health(instance_id):
+        # Stop and start (hardware migration)
+        ec2.stop_instances(InstanceIds=[instance_id])
+        waiter = ec2.get_waiter('RetryMContinuepython        waiter = ec2.get_waiter('instance_stopped')
+        waiter.wait(InstanceIds=[instance_id])
+        ec2.start_instances(InstanceIds=[instance_id])
+        
+        # Still not healthy? Terminate if in ASG
+        if not check_instance_health(instance_id):
+            asg = boto3.client('autoscaling')
+            asg.terminate_instance_in_auto_scaling_group(
+                InstanceId=instance_id,
+                ShouldDecrementDesiredCapacity=False
+            )
+3. Process-Level Monitoring:
+bash# CloudWatch agent custom check
+#!/bin/bash
+# /opt/scripts/health_check.sh
+
+# Check critical processes
+if ! pgrep -x "java" > /dev/null; then
+    aws cloudwatch put-metric-data \
+        --namespace CustomApp \
+        --metric-name ProcessHealth \
+        --value 0
+    systemctl restart myapp
+else
+    aws cloudwatch put-metric-data \
+        --namespace CustomApp \
+        --metric-name ProcessHealth \
+        --value 1
+fi
+4. Load Balancer Health Checks:
+bash# ALB health check configuration
+aws elbv2 modify-target-group \
+    --target-group-arn arn:aws:elasticloadbalancing:... \
+    --health-check-interval-seconds 10 \
+    --health-check-timeout-seconds 5 \
+    --healthy-threshold-count 2 \
+    --unhealthy-threshold-count 3 \
+    --health-check-path "/health" \
+    --matcher HttpCode=200
+Example: Payment API instances became unresponsive due to memory leak. Implemented custom health check endpoint that verified database connectivity and thread pool status. ALB automatically removed unhealthy instances, and ASG launched replacements. Mean time to recovery reduced from 15 minutes (manual) to 2 minutes (automated).
+
+23. How do you implement network traffic mirroring for EC2 instances for security analysis?
+Answer: VPC Traffic Mirroring for packet capture:
+1. Setup Traffic Mirror Target:
+bash# Create network load balancer as target
+aws ec2 create-traffic-mirror-target \
+    --network-load-balancer-arn arn:aws:elasticloadbalancing:region:account:loadbalancer/net/mirror-target/xxx \
+    --description "Security analysis target"
+
+# Or use specific ENI
+aws ec2 create-traffic-mirror-target \
+    --network-interface-id eni-xxxxx \
+    --description "IDS instance"
+2. Create Traffic Mirror Filter:
+bash# Mirror all traffic
+aws ec2 create-traffic-mirror-filter \
+    --description "Capture all traffic"
+
+aws ec2 create-traffic-mirror-filter-rule \
+    --traffic-mirror-filter-id tmf-xxxxx \
+    --traffic-direction ingress \
+    --rule-number 100 \
+    --rule-action accept \
+    --protocol -1 \
+    --source-cidr-block 0.0.0.0/0 \
+    --destination-cidr-block 0.0.0.0/0
+
+# Mirror only specific traffic (e.g., database port)
+aws ec2 create-traffic-mirror-filter-rule \
+    --traffic-mirror-filter-id tmf-xxxxx \
+    --traffic-direction ingress \
+    --rule-number 200 \
+    --rule-action accept \
+    --protocol 6 \
+    --destination-port-range FromPort=3306,ToPort=3306 \
+    --source-cidr-block 0.0.0.0/0 \
+    --destination-cidr-block 0.0.0.0/0
+3. Create Mirror Session:
+bashaws ec2 create-traffic-mirror-session \
+    --network-interface-id eni-source-xxxxx \
+    --traffic-mirror-target-id tmt-xxxxx \
+    --traffic-mirror-filter-id tmf-xxxxx \
+    --session-number 1 \
+    --packet-length 128 \
+    --virtual-network-id 7
+4. Analysis Setup (IDS Instance):
+bash# Install Suricata on analysis instance
+sudo yum install suricata -y
+
+# Configure to listen on mirrored traffic
+sudo tee /etc/suricata/suricata.yaml <<EOF
+af-packet:
+  - interface: eth0
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    tpacket-v3: yes
+EOF
+
+# Start IDS
+sudo suricata -c /etc/suricata/suricata.yaml -i eth0
+Example: Suspected data exfiltration from database servers. Enabled traffic mirroring for all DB instances to Suricata IDS. Detected unauthorized large data transfers to external IP. Identified compromised application credentials and revoked access.
+
+24. Describe your approach to implementing GPU-accelerated workloads on EC2.
+Answer: Optimized GPU instance deployment strategy:
+1. Instance Selection:
+
+P4d/P5: ML training (A100 GPUs, 400 Gbps networking)
+P3: ML inference, training (V100 GPUs)
+G5: Graphics workloads, ML inference (NVIDIA A10G)
+G4dn: Cost-effective inference (NVIDIA T4)
+
+2. AMI Preparation:
+bash# Use AWS Deep Learning AMI or custom setup
+# Install CUDA toolkit
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
+sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600
+sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
+sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+sudo apt-get update
+sudo apt-get -y install cuda
+
+# Install cuDNN
+sudo apt-get install libcudnn8 libcudnn8-dev
+
+# Verify GPU
+nvidia-smi
+3. EFA (Elastic Fabric Adapter) for Multi-GPU:
+bash# Launch with EFA for distributed training
+aws ec2 run-instances \
+    --image-id ami-xxxxx \
+    --instance-type p4d.24xlarge \
+    --network-interfaces '[{
+        "DeviceIndex": 0,
+        "InterfaceType": "efa",
+        "Groups": ["sg-xxxxx"],
+        "SubnetId": "subnet-xxxxx"
+    }]'
+
+# Install EFA driver
+curl -O https://efa-installer.amazonaws.com/aws-efa-installer-latest.tar.gz
+tar -xf aws-efa-installer-latest.tar.gz
+cd aws-efa-installer
+sudo ./efa_installer.sh -y
+4. Spot Instances for Cost Optimization:
+bash# Create Spot Fleet for GPU workloads
+aws ec2 create-fleet \
+    --launch-template-configs '[{
+        "LaunchTemplateSpecification": {
+            "LaunchTemplateId": "lt-xxxxx",
+            "Version": "$Latest"
+        },
+        "Overrides": [
+            {"InstanceType": "p3.2xlarge", "MaxPrice": "1.50"},
+            {"InstanceType": "g4dn.xlarge", "MaxPrice": "0.80"},
+            {"InstanceType": "g4dn.2xlarge", "MaxPrice": "1.20"}
+        ]
+    }]' \
+    --target-capacity-specification '{
+        "TotalTargetCapacity": 10,
+        "OnDemandTargetCapacity": 2,
+        "SpotTargetCapacity": 8,
+        "DefaultTargetCapacityType": "spot"
+    }' \
+    --spot-options '{
+        "AllocationStrategy": "price-capacity-optimized",
+        "InstanceInterruptionBehavior": "stop"
+    }'
+5. Monitoring GPU Utilization:
+bash# CloudWatch custom metrics
+while true; do
+    GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits)
+    GPU_MEM=$(nvidia-smi --query-gpu=utilization.memory --format=csv,noheader,nounits)
+    
+    aws cloudwatch put-metric-data \
+        --namespace GPU/Metrics \
+        --metric-name GPUUtilization \
+        --value $GPU_UTIL \
+        --unit Percent
+    
+    aws cloudwatch put-metric-data \
+        --namespace GPU/Metrics \
+        --metric-name GPUMemory \
+        --value $GPU_MEM \
+        --unit Percent
+    
+    sleep 60
+done
+Example: ML training pipeline required 8x A100 GPUs. Deployed p4d.24xlarge with EFA for distributed training using PyTorch DDP. Reduced training time from 48 hours (single GPU) to 7 hours (8 GPUs). Used Spot instances for dev/test, saving 70% on compute costs.
+
+25. How do you implement instance warmup strategies for Auto Scaling Groups?
+Answer: Comprehensive warmup and health check strategy:
+1. Default Instance Warmup:
+bashaws autoscaling create-auto-scaling-group \
+    --auto-scaling-group-name my-asg \
+    --default-instance-warmup 300 \
+    --health-check-type ELB \
+    --health-check-grace-period 180 \
+    --min-size 2 \
+    --max-size 20 \
+    --desired-capacity 5 \
+    --target-group-arns arn:aws:elasticloadbalancing:... \
+    --launch-template LaunchTemplateId=lt-xxxxx
+2. Application Warmup Script:
+bash#!/bin/bash
+# In user-data script
+
+# Wait for dependencies
+while ! nc -z db-endpoint.rds.amazonaws.com 3306; do
+    sleep 5
+done
+
+# Populate caches
+curl -X POST http://localhost:8080/admin/warmup-cache
+
+# Pre-load ML models
+python3 /opt/app/load_models.py
+
+# Wait for application to be fully ready
+until curl -f http://localhost:8080/health; do
+    sleep 10
+done
+
+# Signal CloudFormation (if using CFN)
+/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+    --resource AutoScalingGroup --region ${AWS::Region}
+3. Step Scaling with Warmup Consideration:
+bashaws autoscaling put-scaling-policy \
+    --auto-scaling-group-name my-asg \
+    --policy-name scale-out-policy \
+    --policy-type StepScaling \
+    --adjustment-type PercentChangeInCapacity \
+    --metric-aggregation-type Average \
+    --step-adjustments '[
+        {
+            "MetricIntervalLowerBound": 0,
+            "MetricIntervalUpperBound": 20,
+            "ScalingAdjustment": 20
+        },
+        {
+            "MetricIntervalLowerBound": 20,
+            "ScalingAdjustment": 40
+        }
+    ]' \
+    --estimated-instance-warmup 300
+4. Predictive Scaling for Known Patterns:
+bashaws autoscaling put-scaling-policy \
+    --auto-scaling-group-name my-asg \
+    --policy-name predictive-scaling \
+    --policy-type PredictiveScaling \
+    --predictive-scaling-configuration '{
+        "MetricSpecifications": [{
+            "TargetValue": 70.0,
+            "PredefinedMetricPairSpecification": {
+                "PredefinedMetricType": "ASGCPUUtilization"
+            }
+        }],
+        "Mode": "ForecastAndScale",
+        "SchedulingBufferTime": 600
+    }'
+5. Lifecycle Hook for Complex Warmup:
+python# Lambda for complex warmup orchestration
+def lambda_handler(event, context):
+    instance_id = event['detail']['EC2InstanceId']
+    
+    # Wait for instance to be InService
+    time.sleep(30)
+    
+    # Run warmup commands via SSM
+    ssm = boto3.client('ssm')
+    response = ssm.send_command(
+        InstanceIds=[instance_id],
+        DocumentName='AWS-RunShellScript',
+        Parameters={
+            'commands': [
+                'sudo -u appuser /opt/app/warmup.sh',
+                'sleep 60',
+                'curl -f http://localhost:8080/health || exit 1'
+            ]
+        }
+    )
+    
+    # Wait for command completion
+    command_id = response['Command']['CommandId']
+    waiter = ssm.get_waiter('command_executed')
+    waiter.wait(
+        CommandId=command_id,
+        InstanceId=instance_id
+    )
+    
+    # Complete lifecycle action
+    asg = boto3.client('autoscaling')
+    asg.complete_lifecycle_action(
+        LifecycleHookName=event['detail']['LifecycleHookName'],
+        AutoScalingGroupName=event['detail']['AutoScalingGroupName'],
+        InstanceId=instance_id,
+        LifecycleActionResult='CONTINUE'
+    )
+Example: E-commerce application took 5 minutes to warm up (cache population, connection pools). Without proper warmup, new instances received traffic immediately, causing 500 errors. Implemented 300-second warmup with health check grace period, reducing error rate during scale-out from 15% to <0.1%.
+
+26. How do you implement cross-region disaster recovery for stateful EC2 applications?
+Answer: Multi-region active-passive DR architecture:
+1. Data Replication Strategy:
+bash# EBS snapshots to DR region
+aws dlm create-lifecycle-policy \
+    --execution-role-arn arn:aws:iam::account:role/DLMRole \
+    --description "Cross-region DR snapshots" \
+    --state ENABLED \
+    --policy-details '{
+        "ResourceTypes": ["VOLUME"],
+        "TargetTags": [{"Key": "DR", "Value": "true"}],
+        "Schedules": [{
+            "Name": "HourlySnapshots",
+            "CopyTags": true,
+            "CreateRule": {"Interval": 1, "IntervalUnit": "HOURS"},
+            "RetainRule": {"Count": 24},
+            "CrossRegionCopyRules": [{
+                "TargetRegion": "us-west-2",
+                "Encrypted": true,
+                "RetainRule": {"Interval": 7, "IntervalUnit": "DAYS"}
+            }]
+        }]
+    }'
+
+# Database replication (e.g., MySQL)
+# Primary region - enable binary logging
+mysql -e "CHANGE MASTER TO MASTER_HOST='primary-db.us-east-1', 
+    MASTER_USER='repl_user', 
+    MASTER_PASSWORD='xxx',
+    MASTER_LOG_FILE='mysql-bin.000001',
+    MASTER_LOG_POS=107;"
+mysql -e "START SLAVE;"
+2. Infrastructure as Code (Terraform):
+hcl# Deploy identical infrastructure in both regions
+module "primary_region" {
+  source = "./modules/application"
+  region = "us-east-1"
+  active = true
+}
+
+module "dr_region" {
+  source = "./modules/application"
+  region = "us-west-2"
+  active = false
+  ami_id = module.primary_region.latest_ami_id
+}
+3. Automated AMI Replication:
+python# Lambda to copy AMIs to DR region
+def lambda_handler(event, context):
+    source_region = 'us-east-1'
+    target_region = 'us-west-2'
+    
+    ec2_source = boto3.client('ec2', region_name=source_region)
+    ec2_target = boto3.client('ec2', region_name=target_region)
+    
+    # Get latest production AMI
+    images = ec2_source.describe_images(
+        Owners=['self'],
+        Filters=[
+            {'Name': 'tag:Environment', 'Values': ['production']},
+            {'Name': 'tag:Application', 'Values': ['web-app']}
+        ]
+    )
+    
+    latest_ami = sorted(images['Images'], 
+                       key=lambda x: x['CreationDate'], 
+                       reverse=True)[0]
+    
+    # Copy to DR region
+    response = ec2_target.copy_image(
+        Name=f"{latest_ami['Name']}-dr",
+        SourceImageId=latest_ami['ImageId'],
+        SourceRegion=source_region,
+        Encrypted=True
+    )
+    
+    # Tag DR AMI
+    ec2_target.create_tags(
+        Resources=[response['ImageId']],
+        Tags=latest_ami['Tags']
+    )
+4. Route53 Health Checks & Failover:
+bash# Primary region health check
+aws route53 create-health-check \
+    --health-check-config '{
+        "Type": "HTTPS",
+        "ResourcePath": "/health",
+        "FullyQualifiedDomainName": "app.example.com",
+        "Port": 443,
+        "RequestInterval": 30,
+        "FailureThreshold": 3
+    }'
+
+# Create failover records
+aws route53 change-resource-record-sets \
+    --hosted-zone-id Z1234567890ABC \
+    --change-batch '{
+        "Changes": [{
+            "Action": "CREATE",
+            "ResourceRecordSet": {
+                "Name": "app.example.com",
+                "Type": "A",
+                "SetIdentifier": "Primary",
+                "Failover": "PRIMARY",
+                "AliasTarget": {
+                    "HostedZoneId": "Z11111",
+                    "DNSName": "alb-primary.us-east-1.elb.amazonaws.com",
+                    "EvaluateTargetHealth": true
+                },
+                "HealthCheckId": "abc123"
+            }
+        },
+        {
+            "Action": "CREATE",
+            "ResourceRecordSet": {
+                "Name": "app.example.com",
+                "Type": "A",
+                "SetIdentifier": "Secondary",
+                "Failover": "SECONDARY",
+                "AliasTarget": {
+                    "HostedZoneId": "Z22222",
+                    "DNSName": "alb-dr.us-west-2.elb.amazonaws.com",
+                    "EvaluateTargetHealth": false
+                }
+            }
+        }]
+    }'
+5. DR Activation Script:
+bash#!/bin/bash
+# dr-failover.sh
+
+DR_REGION="us-west-2"
+
+echo "Starting DR failover to $DR_REGION..."
+
+# 1. Restore latest EBS snapshots
+SNAPSHOT_IDS=$(aws ec2 describe-snapshots \
+    --region $DR_REGION \
+    --filters "Name=tag:DR,Values=true" \
+    --query 'Snapshots | sort_by(@, &StartTime) | [-1].SnapshotId' \
+    --output text)
+
+# 2. Update ASG desired capacity
+aws autoscaling update-auto-scaling-group \
+    --region $DR_REGION \
+    --auto-scaling-group-name app-asg-dr \
+    --desired-capacity 10 \
+    --min-size 5 \
+    --max-size 20
+
+# 3. Promote read replica to primary (if RDS)
+aws rds promote-read-replica \
+    --region $DR_REGION \
+    --db-instance-identifier db-replica
+
+# 4. Update Route53 to force DR (optional - health check does this automatically)
+aws route53 change-resource-record-sets \
+    --hosted-zone-id Z1234567890ABC \
+    --change-batch file://force-dr-routing.json
+
+echo "DR failover complete. Monitor application health."
+Example: Primary region (us-east-1) experienced service disruption. Route53 health checks detected failures within 90 seconds. Automatic DNS failover directed traffic to DR region (us-west-2). RTO achieved: 8 minutes. RPO: 15 minutes (based on snapshot frequency). Processed $2M in transactions during 4-hour outage without data loss.
+
+27. How do you implement least-privilege IAM roles for EC2 instances?
+Answer: Granular IAM role design with conditions:
+1. Principle - No AWS Credentials on Instances:
+bash# NEVER do this
+aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE
+
+# ALWAYS use instance profiles
+aws ec2 associate-iam-instance-profile \
+    --instance-id i-xxxxx \
+    --iam-instance-profile Name=WebServerRole
+2. Least-Privilege Role Example:
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowS3ReadSpecificBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::app-config-bucket",
+        "arn:aws:s3:::app-config-bucket/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Sid": "AllowCloudWatchPutMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "CustomApp"
+        }
+      }
+    },
+    {
+      "Sid": "AllowSSMParameterStore",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:123456789012:parameter/app/prod/*"
+    },
+    {
+      "Sid": "AllowSecretsManager",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/db-password-*",
+      "Condition": {
+        "StringEquals": {
+          "secretsmanager:VersionStage": "AWSCURRENT"
+        }
+      }
+    },
+    {
+      "Sid": "AllowKMSDecrypt",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt"
+      ],
+      "Resource": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": [
+            "s3.us-east-1.amazonaws.com",
+            "secretsmanager.us-east-1.amazonaws.com"
+          ]
+        }
+      }
+    }
+  ]
+}
+3. Session Tags for Dynamic Permissions:
+json{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::bucket-name/${aws:PrincipalTag/team}/*"
+  }]
+}
+4. IAM Permission Boundaries:
+json{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "s3:*",
+      "dynamodb:*",
+      "sqs:*"
+    ],
+    "Resource": "*"
+  },
+  {
+    "Effect": "Deny",
+    "Action": [
+      "iam:*",
+      "organizations:*",
+      "account:*"
+    ],
+    "Resource": "*"
+  }]
+}
+5. Role Audit and Cleanup:
+python# Find overly permissive roles
+import boto3
+
+iam = boto3.client('iam')
+
+def audit_ec2_roles():
+    roles = iam.list_roles()
+    dangerous_permissions = [
+        's3:*', 'dynamodb:*', 'ec2:*', 'iam:*', 'sts:AssumeRole'
+    ]
+    
+    for role in roles['Roles']:
+        if 'EC2' in role['AssumeRolePolicyDocument']:
+            policies = iam.list_attached_role_policies(
+                RoleName=role['RoleName']
+            )
+            
+            for policy in policies['AttachedPolicies']:
+                policy_version = iam.get_policy_version(
+                    PolicyArn=policy['PolicyArn'],
+                    VersionId=iam.get_policy(
+                        PolicyArn=policy['PolicyArn']
+                    )['Policy']['DefaultVersionId']
+                )
+                
+                # Check for wildcards
+                for statement in policy_version['PolicyVersion']['Document']['Statement']:
+                    if statement.get('Effect') == 'Allow':
+                        actions = statement.get('Action', [])
+                        if isinstance(actions, str):
+                            actions = [actions]
+                        
+                        for action in actions:
+                            if any(perm in action for perm in dangerous_permissions):
+                                print(f"ALERT: Role {role['RoleName']} has overly permissive action: {action}")
+Example: Audited 200 EC2 instance roles, found 40% had s3:* permissions when only read was needed. Refactored roles to specific bucket access, preventing data exfiltration incident. Implemented IAM Access Analyzer to continuously monitor for overly permissive policies.
+
+28. How do you implement blue-green deployments with minimal infrastructure duplication?
+Answer: Target group switching strategy:
+1. Infrastructure Setup:
+bash# Create two target groups
+aws elbv2 create-target-group \
+    --name app-blue \
+    --protocol HTTP \
+    --port 80 \
+    --vpc-id vpc-xxxxx \
+    --health-check-path /health \
+    --health-check-interval-seconds 10
+
+aws elbv2 create-target-group \
+    --name app-green \
+    --protocol HTTP \
+    --port 80 \
+    --vpc-id vpc-xxxxx \
+    --health-check-path /health \
+    --health-check-interval-seconds 10
+
+# ALB listener rules
+aws elbv2 create-listener \
+    --load-balancer-arn arn:aws:elasticloadbalancing:... \
+    --protocol HTTP \
+    --port 80 \
+    --default-actions Type=forward,TargetGroupArn=arn:.../app-blue
+2. Deployment Script:
+bash#!/bin/bash
+# blue-green-deploy.sh
+
+NEW_AMI=$1
+CURRENT_TG=$(aws elbv2 describe-listeners \
+    --listener-arns arn:aws:elasticloadbalancing:... \
+    --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+    --output text)
+
+if [[ $CURRENT_TG == *"blue"* ]]; then
+    CURRENT_COLOR="blue"
+    NEW_COLOR="green"
+    NEW_TG_ARN="arn:aws:elasticloadbalancing:.../app-green"
+else
+    CURRENT_COLOR="green"
+    NEW_COLOR="blue"
+    NEW_TG_ARN="arn:aws:elasticloadbalancing:.../app-blue"
+fi
+
+echo "Current: $CURRENT_COLOR, Deploying to: $NEW_COLOR"
+
+# Update new ASG with new AMI
+aws autoscaling update-auto-scaling-group \
+    --auto-scaling-group-name app-$NEW_COLOR \
+    --launch-template LaunchTemplateName=app-template,Version='$Latest' \
+    --min-size 2 \
+    --max-size 10 \
+    --desired-capacity 5
+
+# Wait for new instances to be healthy
+aws autoscaling wait instance-in-service \
+    --auto-scaling-group-name app-$NEW_COLOR
+
+# Wait for health checks
+sleep 60
+
+# Check target health
+HEALTHY_COUNT=$(aws elbv2 describe-target-health \
+    --target-group-arn $NEW_TG_ARN \
+    --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`] | length(@)')
+
+if [ "$HEALTHY_COUNT" -lt 3 ]; then
+    echo "ERROR: Not enough healthy targets. Rolling back."
+    exit 1
+fi
+
+# Switch traffic
+aws elbv2 modify-listener \
+    --listener-arn arn:aws:elasticloadbalancing:... \
+    --default-actions Type=forward,TargetGroupArn=$NEW_TG_ARN
+
+echo "Traffic switched to $NEW_COLOR"
+
+# Monitor for 10 minutes
+sleep 600
+
+# If successful, scale down old environment
+read -p "Deployment successful? Scale down $CURRENT_COLOR? (y/n) " -n 1 -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    aws autoscaling update-auto-scaling-group \
+        --auto-scaling-group-name app-$CURRENT_COLOR \
+        --min-size 0 \
+        --max-size 0 \
+        --desired-capacity 0
+fi
+3. Canary Deployment Variation:
+bash# Gradually shift traffic
+for weight in 10 25 50 75 100; do
+    echo "Shifting $weight% traffic to green"
+    
+    aws elbv2 modify-listener \
+        --listener-arn arn:aws:elasticloadbalancing:... \
+        --default-actions Type=forward,ForwardConfig="{
+            TargetGroups=[
+                {TargetGroupArn=$BLUE_TG_ARN,Weight=$((100-weight))},
+                {TargetGroupArn=$GREEN_TG_ARN,Weight=$weight}
+            ]
+        }"
+    
+    # Monitor CloudWatch alarms
+    sleep 300
+    
+    # Check error rate
+    ERROR_RATE=$(aws cloudwatch get-metric-statistics \
+        --namespace AWS/ApplicationELB \
+        --metric-name HTTPCode_Target_5XX_Count \
+        --start-time $(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%S) \
+        --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+        --period 300 \
+        --statistics Sum \
+        --dimensions Name=LoadBalancer,Value=app/my-alb/xxx \
+        --query 'Datapoints[0].Sum')
+    
+    if (( $(echo "$ERROR_RATE > 100" | bc -l) )); then
+        echo "ERROR: High error rate detected. Rolling back."
+        aws elbv2 modify-listener \
+            --listener-arn arn:aws:elasticloadbalancing:... \
+            --default-actions Type=forward,TargetGroupArn=$BLUE_TG_ARN
+        exit 1
+    fi
+done
+Example: Deployed new application version to 200-instance fleet. Used canary deployment shifting 10% traffic every 5 minutes. Detected 5xx errors at 25% cutover, automatically rolled back within 30 seconds. Fixed bug, reRetryMContinuedeployed successfully. Zero customer-facing downtime, prevented potential $500K revenue loss.
+
+29. How do you handle EC2 instances with ephemeral IP changes in automation scripts?
+Answer: Multiple strategies to handle dynamic IPs:
+1. Use DNS Names Instead of IPs:
