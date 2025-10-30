@@ -311,6 +311,9 @@ Log Processing: Throughput Optimized HDD (st1) volumes are used to store databas
 
 ============================
 
+ec2 instance : 
+
+
 
 
 
