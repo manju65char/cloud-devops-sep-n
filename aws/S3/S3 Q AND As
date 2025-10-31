@@ -1,0 +1,2837 @@
+Amazon S3 - Complete Interview Guide (30 Questions: Basic to Advanced)
+BASIC LEVEL (Questions 1-10)
+1. S3 Bucket Creation and Basic Operations
+Q: Create an S3 bucket following AWS naming best practices and perform basic file operations (upload, download, delete, list).
+A:
+Bucket Naming Rules:
+
+Globally unique across ALL AWS accounts
+3-63 characters
+Lowercase letters, numbers, hyphens only
+Must start with letter or number
+No consecutive dots, no IP format
+Cannot start/end with hyphen
+
+Best Practice Naming:
+{company}-{environment}-{region}-{purpose}
+Example: acmecorp-prod-us-east-1-assets
+Operations via CLI:
+bash# Create bucket
+aws s3 mb s3://acmecorp-prod-us-east-1-assets --region us-east-1
+
+# Upload single file
+aws s3 cp myfile.txt s3://acmecorp-prod-us-east-1-assets/
+
+# Upload with metadata
+aws s3 cp myfile.txt s3://acmecorp-prod-us-east-1-assets/ \
+  --metadata "department=engineering,project=webapp"
+
+# Upload directory recursively
+aws s3 cp ./local-folder s3://acmecorp-prod-us-east-1-assets/remote-folder/ --recursive
+
+# Download file
+aws s3 cp s3://acmecorp-prod-us-east-1-assets/myfile.txt ./
+
+# List objects
+aws s3 ls s3://acmecorp-prod-us-east-1-assets/
+
+# List with details
+aws s3 ls s3://acmecorp-prod-us-east-1-assets/ --recursive --human-readable --summarize
+
+# Delete file
+aws s3 rm s3://acmecorp-prod-us-east-1-assets/myfile.txt
+
+# Delete all objects in prefix
+aws s3 rm s3://acmecorp-prod-us-east-1-assets/old-data/ --recursive
+
+# Sync local to S3 (like rsync)
+aws s3 sync ./local-folder s3://acmecorp-prod-us-east-1-assets/backup/ --delete
+Using Python Boto3:
+pythonimport boto3
+from botocore.exceptions import ClientError
+
+s3 = boto3.client('s3')
+
+# Create bucket
+def create_bucket(bucket_name, region='us-east-1'):
+    try:
+        if region == 'us-east-1':
+            s3.create_bucket(Bucket=bucket_name)
+        else:
+            s3.create_bucket(
+                Bucket=bucket_name,
+                CreateBucketConfiguration={'LocationConstraint': region}
+            )
+        print(f"Bucket {bucket_name} created successfully")
+    except ClientError as e:
+        print(f"Error: {e}")
+
+# Upload file
+def upload_file(file_path, bucket, object_name=None):
+    if object_name is None:
+        object_name = file_path
+    
+    try:
+        s3.upload_file(file_path, bucket, object_name)
+        print(f"Uploaded {file_path} to {bucket}/{object_name}")
+    except ClientError as e:
+        print(f"Error: {e}")
+
+# Download file
+def download_file(bucket, object_name, file_path):
+    try:
+        s3.download_file(bucket, object_name, file_path)
+        print(f"Downloaded {bucket}/{object_name} to {file_path}")
+    except ClientError as e:
+        print(f"Error: {e}")
+
+# List objects
+def list_objects(bucket, prefix=''):
+    try:
+        response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                print(f"{obj['Key']} - {obj['Size']} bytes - {obj['LastModified']}")
+    except ClientError as e:
+        print(f"Error: {e}")
+
+# Delete object
+def delete_object(bucket, key):
+    try:
+        s3.delete_object(Bucket=bucket, Key=key)
+        print(f"Deleted {bucket}/{key}")
+    except ClientError as e:
+        print(f"Error: {e}")
+
+2. S3 Storage Classes
+Q: Explain all S3 storage classes with pricing, retrieval times, and real-world use cases.
+A:
+Complete Storage Class Breakdown:
+Storage ClassAvailabilityDurabilityMin StorageRetrieval FeePrice/GB/moRetrieval TimeUse CaseStandard99.99%11 9'sNoneNo$0.023MillisecondsFrequently accessed dataIntelligent-Tiering99.9%11 9'sNoneNo*$0.023 + monitoringMillisecondsUnknown/changing patternsStandard-IA99.9%11 9's30 daysYes$0.0125MillisecondsInfrequent access (monthly)One Zone-IA99.5%11 9's30 daysYes$0.01MillisecondsNon-critical, infrequentGlacier Instant99.9%11 9's90 daysYes$0.004MillisecondsArchive with instant accessGlacier Flexible99.99%11 9's90 daysYes$0.00361-5 hoursArchive, rare accessGlacier Deep Archive99.99%11 9's180 daysYes$0.0009912 hoursLong-term compliance
+*Intelligent-Tiering: No retrieval fees for frequent/infrequent tiers, but has monitoring fee ($0.0025 per 1000 objects)
+Real-World Use Cases:
+python# Application logs - lifecycle strategy
+use_cases = {
+    "Standard": [
+        "Active website assets (images, CSS, JS)",
+        "Application logs (last 7 days)",
+        "Real-time analytics data",
+        "Frequently accessed databases backups"
+    ],
+    
+    "Intelligent-Tiering": [
+        "User-generated content (unpredictable access)",
+        "Data lakes with varying access patterns",
+        "ML training datasets",
+        "Legacy data with unknown value"
+    ],
+    
+    "Standard-IA": [
+        "Application logs (8-30 days)",
+        "Monthly reports",
+        "Disaster recovery files",
+        "Older versions of documents"
+    ],
+    
+    "One Zone-IA": [
+        "Reproducible data (can regenerate)",
+        "Thumbnails (can recreate from originals)",
+        "Development/test data",
+        "Secondary backup copies"
+    ],
+    
+    "Glacier Instant Retrieval": [
+        "Medical imaging archives",
+        "Quarterly accessed compliance data",
+        "User archives needing occasional access",
+        "Media assets for older content"
+    ],
+    
+    "Glacier Flexible Retrieval": [
+        "Annual compliance archives",
+        "Historical records",
+        "Scientific data archives",
+        "Regulatory data (accessed 1-2x/year)"
+    ],
+    
+    "Glacier Deep Archive": [
+        "7-10 year retention requirements",
+        "Financial records archival",
+        "Regulatory compliance (HIPAA, SOX)",
+        "Tape replacement for cold storage"
+    ]
+}
+Decision Tree:
+pythondef choose_storage_class(access_frequency, retrieval_urgency, min_storage_days, data_critical):
+    """
+    Helper function to choose appropriate storage class
+    """
+    if access_frequency == "daily":
+        return "Standard"
+    
+    elif access_frequency == "unknown":
+        return "Intelligent-Tiering"
+    
+    elif access_frequency == "weekly" or access_frequency == "monthly":
+        if min_storage_days >= 30:
+            if data_critical:
+                return "Standard-IA"
+            else:
+                return "One Zone-IA"
+        else:
+            return "Standard"
+    
+    elif access_frequency == "quarterly":
+        if min_storage_days >= 90:
+            return "Glacier Instant Retrieval"
+        else:
+            return "Standard-IA"
+    
+    elif access_frequency == "yearly":
+        if retrieval_urgency == "hours_ok":
+            return "Glacier Flexible Retrieval"
+        else:
+            return "Glacier Instant Retrieval"
+    
+    elif access_frequency == "rarely":
+        if retrieval_urgency == "day_ok" and min_storage_days >= 180:
+            return "Glacier Deep Archive"
+        else:
+            return "Glacier Flexible Retrieval"
+    
+    return "Standard"  # Default safe option
+
+# Example usage
+print(choose_storage_class("monthly", "immediate", 45, True))  # Standard-IA
+print(choose_storage_class("yearly", "hours_ok", 365, True))   # Glacier Flexible
+```
+
+**Cost Comparison Example (1TB for 1 year):**
+```
+Standard:           $23.55/month × 12 = $282.60
+Standard-IA:        $12.80/month × 12 = $153.60 (46% savings)
+Glacier Instant:    $4.10/month × 12 = $49.20 (83% savings)
+Glacier Flexible:   $3.69/month × 12 = $44.28 (84% savings)
+Deep Archive:       $1.01/month × 12 = $12.12 (96% savings)
+
+3. S3 Versioning
+Q: Explain S3 versioning, its benefits, and how to recover deleted files in a versioned bucket.
+A:
+Versioning Concepts:
+
+Each object modification creates a new version
+Old versions are preserved (never overwritten)
+Delete creates a "delete marker" (recoverable)
+Versioning states: Unversioned (default), Enabled, Suspended
+
+Enable Versioning:
+bash# Enable versioning
+aws s3api put-bucket-versioning \
+  --bucket my-bucket \
+  --versioning-configuration Status=Enabled
+
+# Check versioning status
+aws s3api get-bucket-versioning --bucket my-bucket
+
+# Suspend versioning (doesn't delete existing versions)
+aws s3api put-bucket-versioning \
+  --bucket my-bucket \
+  --versioning-configuration Status=Suspended
+Working with Versions:
+bash# List all versions
+aws s3api list-object-versions --bucket my-bucket --prefix myfile.txt
+
+# Output example:
+{
+  "Versions": [
+    {
+      "Key": "myfile.txt",
+      "VersionId": "3/L4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY",
+      "IsLatest": true,
+      "LastModified": "2025-01-15T10:00:00.000Z",
+      "Size": 1024
+    },
+    {
+      "Key": "myfile.txt",
+      "VersionId": "IYV3p45BT0ac8hjHg1houSdS1Rir1C8y",
+      "IsLatest": false,
+      "LastModified": "2025-01-14T10:00:00.000Z",
+      "Size": 512
+    }
+  ],
+  "DeleteMarkers": []
+}
+
+# Download specific version
+aws s3api get-object \
+  --bucket my-bucket \
+  --key myfile.txt \
+  --version-id 3/L4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY \
+  myfile-v1.txt
+
+# Delete specific version permanently
+aws s3api delete-object \
+  --bucket my-bucket \
+  --key myfile.txt \
+  --version-id 3/L4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY
+Recovery Scenarios:
+Scenario 1: Accidental File Deletion
+pythonimport boto3
+
+s3 = boto3.client('s3')
+
+def recover_deleted_file(bucket, key):
+    """Remove delete marker to restore file"""
+    
+    # List versions
+    response = s3.list_object_versions(Bucket=bucket, Prefix=key)
+    
+    # Find delete markers
+    delete_markers = response.get('DeleteMarkers', [])
+    
+    if not delete_markers:
+        print("No delete markers found. File not deleted.")
+        return
+    
+    # Get the latest delete marker
+    latest_delete_marker = delete_markers[0]
+    
+    if latest_delete_marker['IsLatest']:
+        # Remove delete marker to restore file
+        s3.delete_object(
+            Bucket=bucket,
+            Key=key,
+            VersionId=latest_delete_marker['VersionId']
+        )
+        print(f"Restored {key} by removing delete marker {latest_delete_marker['VersionId']}")
+    else:
+        print("Latest version is not a delete marker. File already exists.")
+
+# Usage
+recover_deleted_file('my-bucket', 'important-file.txt')
+Scenario 2: File Corruption - Restore Previous Version
+pythondef restore_previous_version(bucket, key, versions_back=1):
+    """Restore file to a previous version"""
+    
+    # List versions
+    response = s3.list_object_versions(Bucket=bucket, Prefix=key)
+    versions = response.get('Versions', [])
+    
+    if len(versions) < versions_back + 1:
+        print(f"Not enough versions. Only {len(versions)} versions exist.")
+        return
+    
+    # Get the version to restore
+    target_version = versions[versions_back]
+    
+    # Copy old version as new latest version
+    s3.copy_object(
+        Bucket=bucket,
+        CopySource={
+            'Bucket': bucket,
+            'Key': key,
+            'VersionId': target_version['VersionId']
+        },
+        Key=key
+    )
+    
+    print(f"Restored {key} to version from {target_version['LastModified']}")
+    print(f"Version ID: {target_version['VersionId']}")
+
+# Usage
+restore_previous_version('my-bucket', 'corrupted-file.txt', versions_back=2)
+Scenario 3: Bulk Recovery
+pythondef bulk_recover_files(bucket, prefix=''):
+    """Recover all deleted files in a prefix"""
+    
+    paginator = s3.get_paginator('list_object_versions')
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+    
+    recovered_count = 0
+    
+    for page in pages:
+        # Process delete markers
+        for delete_marker in page.get('DeleteMarkers', []):
+            if delete_marker['IsLatest']:
+                s3.delete_object(
+                    Bucket=bucket,
+                    Key=delete_marker['Key'],
+                    VersionId=delete_marker['VersionId']
+                )
+                print(f"Recovered: {delete_marker['Key']}")
+                recovered_count += 1
+    
+    print(f"Total files recovered: {recovered_count}")
+
+# Usage
+bulk_recover_files('my-bucket', prefix='documents/')
+Versioning Best Practices:
+python# 1. Enable MFA Delete for added protection
+aws s3api put-bucket-versioning \
+  --bucket my-bucket \
+  --versioning-configuration Status=Enabled,MFADelete=Enabled \
+  --mfa "arn:aws:iam::123456789012:mfa/root-account-mfa-device 123456"
+
+# 2. Lifecycle policy to manage old versions
+lifecycle_policy = {
+    "Rules": [{
+        "Id": "DeleteOldVersions",
+        "Status": "Enabled",
+        "NoncurrentVersionExpiration": {
+            "NoncurrentDays": 90
+        },
+        "NoncurrentVersionTransitions": [{
+            "NoncurrentDays": 30,
+            "StorageClass": "GLACIER_IR"
+        }]
+    }]
+}
+
+# 3. Monitor version count
+def check_version_count(bucket):
+    """Alert if too many versions exist"""
+    response = s3.list_object_versions(Bucket=bucket)
+    
+    version_counts = {}
+    for version in response.get('Versions', []):
+        key = version['Key']
+        version_counts[key] = version_counts.get(key, 0) + 1
+    
+    # Alert on files with excessive versions
+    for key, count in version_counts.items():
+        if count > 100:
+            print(f"WARNING: {key} has {count} versions")
+```
+
+**Cost Impact:**
+- Each version counts as a separate object for storage costs
+- 100 versions of 1GB file = 100GB storage cost
+- Use lifecycle policies to transition old versions to cheaper storage
+- Monitor with S3 Storage Lens
+
+---
+
+### **4. S3 Bucket Policies vs IAM Policies**
+**Q:** When to use bucket policies vs IAM policies? Provide practical examples with JSON policies.
+
+**A:**
+
+**Key Differences:**
+
+| Feature | Bucket Policy | IAM Policy |
+|---------|--------------|------------|
+| Attached to | S3 Bucket | IAM User/Role/Group |
+| Cross-account | Yes (easily) | Yes (complex) |
+| Anonymous access | Yes | No |
+| IP restrictions | Yes | Yes |
+| VPC restrictions | Yes | No |
+| Size limit | 20KB | 6KB (managed), 10KB (inline) |
+| Who can access | Defined in policy | Who policy is attached to |
+
+**When to Use Bucket Policy:**
+```
+✓ Granting cross-account access
+✓ Public/anonymous access
+✓ Restricting by IP address
+✓ Restricting to VPC endpoints
+✓ CloudFront Origin Access Identity
+✓ Policy applies to all objects in bucket
+✓ Applying conditions based on request parameters
+```
+
+**When to Use IAM Policy:**
+```
+✓ Managing user/role permissions across multiple buckets
+✓ Centralized permission management
+✓ User-specific or role-specific access
+✓ Temporary credentials (STS)
+✓ Path-based access (user home directories)
+Example 1: Public Read Access (Bucket Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::my-public-bucket/*",
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": [
+            "203.0.113.0/24",
+            "198.51.100.0/24"
+          ]
+        }
+      }
+    }
+  ]
+}
+Example 2: Cross-Account Access (Bucket Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAccountBAccess",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::999999999999:root"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::my-shared-bucket/shared/*"
+    },
+    {
+      "Sid": "AllowAccountBListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::999999999999:root"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::my-shared-bucket",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "shared/*"
+        }
+      }
+    }
+  ]
+}
+Example 3: VPC Endpoint Restriction (Bucket Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyAccessFromOutsideVPC",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::my-private-bucket",
+        "arn:aws:s3:::my-private-bucket/*"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "aws:sourceVpce": [
+            "vpce-1a2b3c4d",
+            "vpce-5e6f7g8h"
+          ]
+        }
+      }
+    }
+  ]
+}
+Example 4: User Home Directory (IAM Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowUserToSeeAllBuckets",
+      "Effect": "Allow",
+      "Action": "s3:ListAllMyBuckets",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowUserToListTheirHomeFolder",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::company-user-data",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "home/${aws:username}/*"
+        }
+      }
+    },
+    {
+      "Sid": "AllowUserFullAccessToTheirHomeFolder",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::company-user-data/home/${aws:username}/*"
+    }
+  ]
+}
+Example 5: Enforce Encryption (Bucket Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyUnencryptedObjectUploads",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::my-secure-bucket/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    },
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::my-secure-bucket",
+        "arn:aws:s3:::my-secure-bucket/*"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}
+Example 6: Time-Based Access (Bucket Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAccessDuringBusinessHours",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/ContractorRole"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::project-data/*",
+      "Condition": {
+        "DateGreaterThan": {
+          "aws:CurrentTime": "2025-01-01T09:00:00Z"
+        },
+        "DateLessThan": {
+          "aws:CurrentTime": "2025-01-01T17:00:00Z"
+        }
+      }
+    }
+  ]
+}
+Example 7: Multi-Service Access (IAM Policy)
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEC2InstanceToAccessS3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::app-data/*"
+    },
+    {
+      "Sid": "AllowEC2InstanceToListBucket",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::app-data"
+    },
+    {
+      "Sid": "AllowCloudWatchLogging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+Applying Policies:
+bash# Apply bucket policy
+aws s3api put-bucket-policy \
+  --bucket my-bucket \
+  --policy file://bucket-policy.json
+
+# Attach IAM policy to role
+aws iam put-role-policy \
+  --role-name MyEC2Role \
+  --policy-name S3AccessPolicy \
+  --policy-document file://iam-policy.json
+
+# View bucket policy
+aws s3api get-bucket-policy --bucket my-bucket
+
+# Delete bucket policy
+aws s3api delete-bucket-policy --bucket my-bucket
+Testing Policies:
+pythonimport boto3
+import json
+
+def test_s3_access(bucket, key, action='s3:GetObject'):
+    """Test if current credentials have access"""
+    
+    iam = boto3.client('iam')
+    sts = boto3.client('sts')
+    
+    # Get current identity
+    identity = sts.get_caller_identity()
+    
+    # Simulate policy
+    response = iam.simulate_principal_policy(
+        PolicySourceArn=identity['Arn'],
+        ActionNames=[action],
+        ResourceArns=[f'arn:aws:s3:::{bucket}/{key}']
+    )
+    
+    for result in response['EvaluationResults']:
+        print(f"Action: {result['EvalActionName']}")
+        print(f"Decision: {result['EvalDecision']}")
+        if result['EvalDecision'] == 'denied':
+            print(f"Reason: {result.get('OrganizationsDecisionDetail', {})}")
+
+# Usage
+test_s3_access('my-bucket', 'file.txt', 's3:GetObject')
+```
+
+---
+
+### **5. S3 Lifecycle Policies**
+**Q:** Design a comprehensive lifecycle policy for application logs with different retention requirements.
+
+**A:**
+
+**Scenario Requirements:**
+```
+- Access logs: Keep 90 days (frequently accessed first 7 days)
+- Error logs: Keep 1 year (frequently accessed first 30 days)
+- Audit logs: Keep 7 years (compliance requirement)
+- Debug logs: Keep 30 days only
+- Old versions: Transition to Glacier after 30 days, delete after 90 days
+Complete Lifecycle Policy:
+xml<LifecycleConfiguration>
+  <!-- Rule 1: Access Logs -->
+  <Rule>
+    <ID>AccessLogsLifecycle</ID>
+    <Filter>
+      <Prefix>logs/access/</Prefix>
+    </Filter>
+    <Status>Enabled</Status>
+    
+    <!-- Day 0-7: Standard (frequent analysis) -->
+    <!-- Day 7-30: Move to IA -->
+    <Transition>
+      <Days>7</Days>
+      <StorageClass>STANDARD_IA</StorageClass>
+    </Transition>
+    
+    <!-- Day 30-90: Move to Glacier Instant -->
+    <Transition>
+      <Days>30</Days>
+      <StorageClass>GLACIER_IR</StorageClass>
+    </Transition>
+    
+    <!-- Day 90: Delete -->
+    <Expiration>
+      <Days>90</Days>
+    </Expiration>
+    
+    <!-- Clean up incomplete multipart uploads -->
+    <AbortIncompleteMultipartUpload>
+      <DaysAfterInitiation>7</DaysAfterInitiation>
+    </AbortIncompleteMultipartUpload>
+  </Rule>
+  
+  <!-- Rule 2: Error Logs -->
+  <Rule>
+    <ID>ErrorLogsLifecycle</ID>
+    <Filter>
+      <And>
+        <Prefix>logs/error/</Prefix>
+        <Tag>
+          <Key>LogType</Key>
+          <Value>Error</Value>
+        </Tag>
+      </And>
+    </Filter>
+    <Status>Enabled</Status>
+    
+    <!-- Day 0-30: Standard -->
+    <!-- Day 30-90: Move to IA -->
+    <Transition>
+      <Days>30</Days>
+      <StorageClass>STANDARD_IA</StorageClass>
+    </Transition>
+    
+    <!-- Day 90-365: Move to Glacier Flexible -->
+    <Transition>
+      <Days>90</Days>
+      <StorageClass>GLACIER</StorageClass>
+    </Transition>
+    
+    <!-- Day 365: Delete -->
+    <Expiration>
+      <Days>365</Days>
+    </Expiration>
+  </Rule>
+  
+  <!-- Rule 3: Audit Logs (Compliance - 7 years) -->
+  <Rule>
+    <ID>AuditLogsLifecycle</ID>
+    <Filter>
+      <Prefix>logs/audit/</Prefix>
+    </Filter>
+    <Status>Enabled</Status>
+    
+    <!-- Day 0-30: Standard (recent audits) -->
+    <!-- Day 30-90: Move to IA -->
+    <Transition>
+      <Days>30</Days>
+      <StorageClass>STANDARD_IA</StorageClass>
+    </Transition>
+    
+    <!-- Day 90-2555: Move to Deep Archive -->
+    <Transition>
+      <Days>90</Days>
+      <StorageClass>DEEP_ARCHIVE</StorageClass>
+    </Transition>
+    
+    <!-- Day 2555 (7 years): Delete -->
+    <Expiration>
+      <Days>2555</Days>
+    </Expiration>
+  </Rule>
+  
+  <!-- Rule 4: Debug Logs (Short retention) -->
+  <Rule>
+    <ID>DebugLogsLifecycle</ID>
+    <Filter>
+      <Prefix>logs/debug/</Prefix>
+    </Filter>
+    <Status>Enabled</Status>
+    
+    <!-- Delete after 30 days -->
+    <Expiration>
+      <Days>30</Days>
+    </Expiration>
+  </Rule>
+  
+  <!-- Rule 5: Expired Delete Markers -->
+  <Rule>
+    <ID>CleanupExpiredDeleteMarkers</ID>
+    <Expiration>
+      <ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>
+    </Expiration>
+    <Status>Enabled</Status>
+  </Rule>
+  
+  <!-- Rule 6: Old Versions Management -->
+  <Rule>
+    <ID>OldVersionsLifecycle</ID>
+    <Filter>
+      <Prefix>logs/</Prefix>
+    </Filter>
+    <Status>Enabled</Status>
+    
+    <!-- Move noncurrent versions to Glacier after 30 days -->
+    <NoncurrentVersionTransition>
+      <NoncurrentDays>30</NoncurrentDays>
+      <StorageClass>GLACIER_IR</StorageClass>
+    </NoncurrentVersionTransition>
+    
+    <!-- Delete noncurrent versions after 90 days -->
+    <NoncurrentVersionExpiration>
+      <NoncurrentDays>90</NoncurrentDays>
+    </NoncurrentVersionExpiration>
+    
+    <!-- Keep only 5 newer noncurrent versions -->
+    <NoncurrentVersionExpiration>
+      <NewerNoncurrentVersions>5</NewerNoncurrentVersions>
+      <NoncurrentDays>1</NoncurrentDays>
+    </NoncurrentVersionExpiration>
+  </Rule>
+  
+  <!-- Rule 7: Date-based expiration -->
+  <Rule>
+    <ID>ExpireOldReports</ID>
+    <Filter>
+      <Prefix>reports/2023/</Prefix>
+    </Filter>
+    <Status>Enabled</Status>
+    
+    <!-- Expire on specific date -->
+    <Expiration>
+      <Date>2026-01-01T00:00:00.000Z</Date>
+    </Expiration>
+  </Rule>
+</LifecycleConfiguration>
+Apply Lifecycle Policy:
+bash# Convert XML to JSON or use XML directly
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket my-logs-bucket \
+  --lifecycle-configuration file://lifecycle-policy.xml
+
+# View current lifecycle policy
+aws s3api get-bucket-lifecycle-configuration \
+  --bucket my-logs-bucket
+
+# Delete lifecycle policy
+aws s3api delete-bucket-lifecycle \
+  --bucket my-logs-bucket
+Using Python to Create Dynamic Policies:
+pythonimport boto3
+import json
+from datetime import datetime, timedelta
+
+s3 = boto3.client('s3')
+
+def create_lifecycle_policy(bucket_name):
+    """Create comprehensive lifecycle policy"""
+    
+    lifecycle_config = {
+        'Rules': [
+            {
+                'ID': 'AccessLogs',
+                'Status': 'Enabled',
+                'Filter': {'Prefix': 'logs/access/'},
+                'Transitions': [
+                    {
+                        'Days': 7,
+                        'StorageClass': 'STANDARD_IA'
+                    },
+                    {
+                        'Days': 30,
+                        'StorageClass': 'GLACIER_IR'
+                    }
+                ],
+                'Expiration': {'Days': 90},
+                'AbortIncompleteMultipartUpload': {
+                    'DaysAfterInitiation': 7
+                }
+            },
+            {
+                'ID': 'ErrorLogs',
+                'Status': 'Enabled',
+                'Filter': {
+                    'And': {
+                        'Prefix': 'logs/error/',
+                        'Tags': [
+                            {'Key': 'LogType', 'Value': 'Error'}
+                        ]
+                    }
+                },
+                'Transitions': [
+                    {
+                        'Days': 30,
+                        'StorageClass': 'STANDARD_IA'
+                    },
+                    {
+                        'Days': 90,
+                        'StorageClass': 'GLACIER'
+                    }
+                ],
+                'Expiration': {'Days': 365}
+            },
+            {
+                'ID': 'AuditLogs',
+                'Status': 'Enabled',
+                'Filter': {'Prefix': 'logs/audit/'},
+                'Transitions': [
+                    {
+                        'Days': 30,
+                        'StorageClass': 'STANDARD_IA'
+                    },
+                    {
+                        'Days': 90,
+                        'StorageClass': 'DEEP_ARCHIVE'
+                    }
+                ],
+                'Expiration': {'Days': 2555}  # 7 years
+            },
+            {
+                'ID': 'DebugLogs',
+                'Status': 'Enabled',
+                'Filter': {'Prefix': 'logs/debug/'},
+                'Expiration': {'Days': 30}
+            },
+            {
+                'ID': 'OldVersions',
+                'Status': 'Enabled',
+                'Filter': {'Prefix': 'logs/'},
+                'NoncurrentVersionTransitions': [
+                    {
+                        'NoncurrentDays': 30,
+                        'StorageClass': 'GLACIER_IR'
+                    }
+                ],
+                'NoncurrentVersionExpiration': {
+                    'NoncurrentDays': 90,
+                    'NewerNoncurrentVersions': 5
+                }
+            },
+            {
+                'ID': 'ExpiredDeleteMarkers',
+                'Status': 'Enabled',
+                'Expiration': {
+                    'ExpiredObjectDeleteMarker': True
+                }
+            }
+        ]
+    }
+    
+    try:
+        s3.put_bucket_lifecycle_configuration(
+            Bucket=bucket_name,
+            LifecycleConfiguration=lifecycle_config
+        )
+        print(f"Lifecycle policy applied to {bucket_name}")
+    except Exception as e:
+        print(f"Error: {e}")
+
+# Apply policy
+create_lifecycle_policy('my-logs-bucket')
+Monitor Lifecycle Transitions:
+pythondef monitor_lifecycle_transitions(bucket_name):
+    """Monitor objects transitioning between storage classes"""
+    
+    # Enable S3 Analytics
+    s3.put_bucket_analytics_configuration(
+        Bucket=bucket_name,
+        Id='lifecycle-analysis',
+        AnalyticsConfiguration={
+            'Id': 'lifecycle-analysis',
+            'StorageClassAnalysis': {
+                'DataExport': {
+                    'OutputSchemaVersion': 'V_1',
+                    'Destination': {
+                        'S3BucketDestination': {
+                            'Format': 'CSV',
+                            'Bucket': f'arn:aws:s3:::analytics-bucket',
+                            'Prefix': 'lifecycle-analytics/'
+                        }
+                    }
+                }
+            }
+        }
+    )
+    
+    print(f"Analytics enabled for {bucket_name}")
+Cost Analysis:
+pythondef calculate_lifecycle_savings(bucket_name):
+    """Calculate potential savings from lifecycle policy"""
+    
+    # Get object sizes by storage class
+    response = s3.list_objects_v2(Bucket=bucket_name)
+    
+    storage_by_age = {
+        '0-7': 0,    # Standard
+        '7-30': 0,   # Standard-IA
+        '30-90': 0,  # Glacier IR
+        '90+': 0     # Will be deleted
+    }
+    
+    for obj in response.get('Contents', []):
+        age_days = (datetime.now(obj['LastModified'].tzinfo) - obj['LastModified']).days
+        size_gb = obj['Size'] / (1024**3)
+        
+        if age_days <= 7:
+            storage_by_age['0-7'] += size_gb
+        elif age_days <= 30:
+            storage_by_age['7-30'] += size_gb
+        elif age_days <= 90:
+            storage_by_age['30-90'] += size_gb
+        else:
+            storage_by_age['90+'] += size_gb
+    
+    # Calculate costs
+    costs = {
+        'Without Lifecycle': sum(storage_by_age.values()) * 0.023,  # All Standard
+        'With Lifecycle': (
+            storage_by_age['0-7'] * 0.023 +     # Standard
+            storage_by_age['7-30'] * 0.0125 +   # Standard-IA
+            storage_by_age['30-90'] * 0.004 +   # Glacier IR
+            storage_by_age['90+'] * 0           # Deleted
+        )
+    }
+    
+    savings = costs['Without Lifecycle'] - costs['With Lifecycle']
+    savings_percent = (savings / costs['Without Lifecycle']) * 100
+    
+    print(f"Monthly Cost Without Lifecycle: ${costs['Without Lifecycle']:.2f}")
+    print(f"Monthly Cost With Lifecycle: ${costs['With Lifecycle']:.2f}")
+    print(f"Monthly Savings: ${savings:.2f} ({savings_percent:.1f}%)")
+
+calculate_lifecycle_savings('my-logs-bucket')
+
+6. S3 Encryption
+Q: Explain all S3 encryption methods (SSE-S3, SSE-KMS, SSE-C, client-side). When to use each?
+A:
+Encryption Methods Comparison:
+MethodKey ManagementPerformanceAudit TrailCostUse CaseSSE-S3AWS managedFastBasicFreeGeneral purposeSSE-KMSAWS KMSSlowerDetailed$0.03/10K requestsCompliance, auditSSE-CCustomer providesFastCustomer managedFreeCustomer controlClient-SideCustomer managesVariesCustomer managedFreeMaximum security
+1. SSE-S3 (Server-Side Encryption with S3-Managed Keys)
+When to use:
+
+General purpose encryption
+No specific key management requirements
+Cost-sensitive applications
+
+Implementation:
+bash# Upload with SSE-S3
+aws s3 cp myfile.txt s3://my-bucket/ \
+  --server-side-encryption AES256
+
+# Enable default encryption for bucket
+aws s3api put-bucket-encryption \
+  --bucket my-bucket \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+      },
+      "BucketKeyEnabled": false
+    }]
+  }'
+pythonimport boto3
+
+s3 = boto3.client('s3')
+
+# Upload with SSE-S3
+s3.put_object(
+    Bucket='my-bucket',
+    Key='sensitive-data.txt',
+    Body=b'Confidential information',
+    ServerSideEncryption='AES256'
+)
+
+# Enable bucket default encryption
+s3.put_bucket_encryption(
+    Bucket='my-bucket',
+    ServerSideEncryptionConfiguration={
+        'Rules': [{
+            'ApplyServerSideEncryptionByDefault': {
+                'SSEAlgorithm': 'AES256'
+            }
+        }]
+    }
+)
+2. SSE-KMS (Server-Side Encryption with AWS KMS)
+When to use:
+
+Compliance requirements (HIPAA, PCI-DSS)
+Need detailed audit trail (CloudTrail)
+Key rotation requirements
+Access control via KMS policies
+
+Implementation:
+bash# Create KMS key
+aws kms create-key \
+  --description "S3 encryption key" \
+  --key-policy file://key-policy.json
+
+# Create alias
+aws kms create-alias \
+  --alias-name alias/s3-encryption \
+  --target-key-id 1234abcd-12ab-34cd-56ef-1234567890ab
+
+# Upload with SSE-KMS
+aws s3 cp myfile.txt s3://my-bucket/ \
+  --server-side-encryption aws:kms \
+  --ssekms-key-id alias/s3-encryption
+
+# Enable bucket default encryption with KMS
+aws s3api put-bucket-encryption \
+  --bucket my-bucket \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "aws:kms",
+        "KMSMasterKeyID": "alias/s3-encryption"
+      },
+      "BucketKeyEnabled": true
+    }]
+  }'
+KMS Key Policy:
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Enable IAM User Permissions",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:root"
+      },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "Allow S3 to use the key",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "s3.amazonaws.com"
+      },
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Allow specific role to use key",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/DataAnalystRole"
+      },
+      "Action": [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "s3.us-east-1.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
+python# Upload with SSE-KMS and bucket key
+s3.put_object(
+    Bucket='my-bucket',
+    Key='confidential.pdf',
+    Body=open('confidential.pdf', 'rb'),
+    ServerSideEncryption='aws:kms',
+    SSEKMSKeyId='alias/s3-encryption',
+    BucketKeyEnabled=True  # Reduces KMS API calls
+)
+
+# Download requires decrypt permission
+response = s3.get_object(
+    Bucket='my-bucket',
+    Key='confidential.pdf'
+)
+data = response['Body'].read()
+Bucket Key Feature (Reduces KMS costs by 99%):
+python# Enable S3 Bucket Keys
+s3.put_bucket_encryption(
+    Bucket='my-bucket',
+    ServerSideEncryptionConfiguration={
+        'Rules': [{
+            'ApplyServerSideEncryptionByDefault': {
+                'SSEAlgorithm': 'aws:kms',
+                'KMSMasterKeyID': 'alias/s3-encryption'
+            },
+            'BucketKeyEnabled': True  # Critical for cost optimization
+        }]
+    }
+)
+3. SSE-C (Server-Side Encryption with Customer-Provided Keys)
+When to use:
+
+Customer wants full control over encryption keys
+Keys must not be stored in AWS
+Regulatory requirements for key custody
+
+Implementation:
+pythonimport base64
+import hashlib
+import os
+
+# Generate encryption key (customer responsibility)
+encryption_key = os.urandom(32)  # 256-bit key
+key_b64 = base64.b64encode(encryption_key).decode()
+key_md5 = base64.b64encode(hashlib.md5(encryption_key).digest()).decode()
+
+# Upload with SSE-C
+s3.put_object(
+    Bucket='my-bucket',
+    Key='top-secret.txt',
+    Body=b'Highly confidential data',
+    SSECustomerAlgorithm='AES256',
+    SSECustomerKey=key_b64,
+    SSECustomerKeyMD5=key_md5
+)
+
+# Download requires same key
+response = s3.get_object(
+    Bucket='my-bucket',
+    Key='top-secret.txt',
+    SSECustomerAlgorithm='AES256',
+    SSECustomerKey=key_b64,
+    SSECustomerKeyMD5=key_md5
+)
+data = response['Body'].read()
+
+# Copy object with SSE-C requires both source and destination keys
+s3.copy_object(
+    Bucket='my-bucket',
+    Key='top-secret-copy.txt',
+    CopySource={'Bucket': 'my-bucket', 'Key': 'top-secret.txt'},
+    CopySourceSSECustomerAlgorithm='AES256',
+    CopySourceSSECustomerKey=key_b64,
+    CopySourceSSECustomerKeyMD5=key_md5,
+    SSECustomerAlgorithm='AES256',
+    SSECustomerKey=key_b64,
+    SSECustomerKeyMD5=key_md5
+)
+⚠️ Important: Customer must manage keys securely
+python# Store keys in AWS Secrets Manager or external KMS
+import boto3
+
+secrets_manager = boto3.client('secretsmanager')
+
+# Store encryption key
+secrets_manager.create_secret(
+    Name='s3-sse-c-key',
+    SecretString=key_b64,
+    Tags=[
+        {'Key': 'Purpose', 'Value': 'S3-SSE-C'}
+    ]
+)
+
+# Retrieve key when needed
+def get_encryption_key():
+    response = secrets_manager.get_secret_value(SecretId='s3-sse-c-key')
+    return response['SecretString']
+4. Client-Side Encryption
+When to use:
+
+Maximum security (data encrypted before leaving client)
+Zero trust in cloud provider
+Regulatory requirements for end-to-end encryption
+
+Implementation with AWS Encryption SDK:
+pythonimport boto3
+from aws_encryption_sdk import EncryptionSDKClient, StrictAwsKmsMasterKeyProvider
+
+# Initialize encryption client
+client = EncryptionSDKClient()
+
+# Create master key provider (uses KMS but encrypts client-side)
+kms_key_provider = StrictAwsKmsMasterKeyProvider(
+    key_ids=['arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab']
+)
+
+# Encrypt data client-side
+plaintext = b'Sensitive data'
+encrypted, encryptor_header = client.encrypt(
+    source=plaintext,
+    key_provider=kms_key_provider
+)
+
+# Upload encrypted data
+s3 = boto3.client('s3')
+s3.put_object(
+    Bucket='my-bucket',
+    Key='client-encrypted.bin',
+    Body=encrypted
+)
+
+# Download and decrypt
+response = s3.get_object(Bucket='my-bucket', Key='client-encrypted.bin')
+encrypted_data = response['Body'].read()
+
+decrypted, decryptor_header = client.decrypt(
+    source=encrypted_data,
+    key_provider=kms_key_provider
+)
+
+print(decrypted)  # Original data
+Custom Client-Side Encryption:
+pythonfrom cryptography.fernet import Fernet
+import boto3
+
+class S3ClientSideEncryption:
+    def __init__(self, bucket):
+        self.bucket = bucket
+        self.s3 = boto3.client('s3')
+        self.key = Fernet.generate_key()  # Store securely!
+        self.cipher = Fernet(self.key)
+    
+    def upload_encrypted(self, file_path, s3_key):
+        """Encrypt and upload file"""
+        # Read file
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        
+        # Encrypt
+        encrypted_data = self.cipher.encrypt(data)
+        
+        # Upload
+        self.s3.put_object(
+            Bucket=self.bucket,
+            Key=s3_key,
+            Body=encrypted_data,
+            Metadata={'encrypted': 'client-side'}
+        )
+        print(f"Uploaded encrypted: {s3_key}")
+    
+    def download_decrypt(self, s3_key, output_path):
+        """Download and decrypt file"""
+        # Download
+        response = self.s3.get_object(Bucket=self.bucket, Key=s3_key)
+        encrypted_data = response['Body'].read()
+        
+        # Decrypt
+        decrypted_data = self.cipher.decrypt(encrypted_data)
+        
+        # Save
+        with open(output_path, 'wb') as f:
+            f.write(decrypted_data)
+        print(f"Downloaded and decrypted: {output_path}")
+
+# Usage
+encryptor = S3ClientSideEncryption('my-bucket')
+encryptor.upload_encrypted('sensitive.pdf', 'encrypted/sensitive.pdf')
+encryptor.download_decrypt('encrypted/sensitive.pdf', 'decrypted.pdf')
+Enforce Encryption via Bucket Policy:
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyUnencryptedObjectUploads",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::my-secure-bucket/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": ["AES256", "aws:kms"]
+        }
+      }
+    },
+    {
+      "Sid": "DenyNonKMSEncryption",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::my-compliance-bucket/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "aws:kms"
+        }
+      }
+    },
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::my-secure-bucket",
+        "arn:aws:s3:::my-secure-bucket/*"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}
+Audit Encryption Status:
+pythondef audit_encryption_status(bucket_name):
+    """Check encryption status of all objects"""
+    
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket_name)
+    
+    encryption_stats = {
+        'SSE-S3': 0,
+        'SSE-KMS': 0,
+        'SSE-C': 0,
+        'None': 0
+    }
+    
+    for page in pages:
+        for obj in page.get('Contents', []):
+            # Get object metadata
+            response = s3.head_object(Bucket=bucket_name, Key=obj['Key'])
+            
+            encryption = response.get('ServerSideEncryption', 'None')
+            
+            if encryption == 'AES256':
+                encryption_stats['SSE-S3'] += 1
+            elif encryption == 'aws:kms':
+                encryption_stats['SSE-KMS'] += 1
+            elif 'SSECustomerAlgorithm' in response:
+                encryption_stats['SSE-C'] += 1
+            else:
+                encryption_stats['None'] += 1
+                print(f"⚠️ Unencrypted: {obj['Key']}")
+    
+    print(f"\nEncryption Audit for {bucket_name}:")
+    for method, count in encryption_stats.items():
+        print(f"  {method}: {count} objects")
+    
+    return encryption_stats
+
+audit_encryption_status('my-bucket')
+```
+
+**Cost Comparison:**
+```
+Scenario: 1TB data, 1M requests/month
+
+SSE-S3:
+- Storage: $23/month
+- Requests: Free
+- Total: $23/month
+
+SSE-KMS (without Bucket Keys):
+- Storage: $23/month
+- KMS requests: 1M × $0.03/10K = $3/month
+- Total: $26/month
+
+SSE-KMS (with Bucket Keys):
+- Storage: $23/month
+- KMS requests: ~100 × $0.03/10K = $0.0003/month
+- Total: $23/month (99% reduction!)
+
+SSE-C / Client-Side:
+- Storage: $23/month
+- Key management: Customer cost
+- Total: $23/month + key management
+
+7. S3 Performance Optimization
+Q: Your application needs to upload 50,000 files per second to S3. Design a solution for maximum throughput.
+A:
+S3 Performance Limits:
+
+3,500 PUT/COPY/POST/DELETE requests per second per prefix
+5,500 GET/HEAD requests per second per prefix
+No limit on prefixes (can scale horizontally)
+Request rate automatically scales based on traffic patterns
+
+Solution 1: Prefix Distribution
+pythonimport hashlib
+import boto3
+import concurrent.futures
+from datetime import datetime
+
+s3 = boto3.client('s3')
+
+def get_distributed_prefix(filename):
+    """
+    Distribute files across multiple prefixes using hash
+    Achieves 3,500 × N prefixes = 3,500N requests/second
+    """
+    # Generate hash from filename
+    hash_obj = hashlib.md5(filename.encode())
+    hash_hex = hash_obj.hexdigest()
+    
+    # Use first 4 characters as prefix (16^4 = 65,536 prefixes)
+    prefix = hash_hex[:4]
+    
+    # Create hierarchical structure: ab/cd/filename
+    return f"{prefix[:2]}/{prefix[2:4]}/{filename}"
+
+# Example
+print(get_distributed_prefix("file1.jpg"))  # 5f/4d/file1.jpg
+print(get_distributed_prefix("file2.jpg"))  # c8/1e/file2.jpg
+print(get_distributed_prefix("file3.jpg"))  # 73/48/file3.jpg
+Solution 2: Multipart Upload for Large Files
+pythonimport os
+import math
+import threading
+from boto3.s3.transfer import TransferConfig
+
+def upload_large_file(file_path, bucket, key):
+    """
+    Multipart upload with optimized settings
+    """
+    # File size
+    file_size = os.path.getsize(file_path)
+    
+    # Configure multipart upload
+    config = TransferConfig(
+        multipart_threshold=1024 * 25,      # 25MB
+        max_concurrency=10,                  # 10 parallel threads
+        multipart_chunksize=1024 * 25,      # 25MB per part
+        use_threads=True
+    )
+    
+    # Upload
+    s3.upload_file(
+        file_path,
+        bucket,
+        key,
+        Config=config,
+        Callback=ProgressPercentage(file_path)
+    )
+
+class ProgressPercentage:
+    def __init__(self, filename):
+        self._filename = filename
+        self._size = float(os.path.getsize(filename))
+        self._seen_so_far = 0
+        self._lock = threading.Lock()
+
+    def __call__(self, bytes_amount):
+        with self._lock:
+            self._seen_so_far += bytes_amount
+            percentage = (self._seen_so_far / self._size) * 100
+            print(f"\r{self._filename}: {percentage:.2f}%", end='')
+Solution 3: Parallel Uploads with Thread Pool
+pythonimport concurrent.futures
+import time
+
+def upload_file_optimized(file_info):
+    """Upload single file with distributed prefix"""
+    file_path, bucket = file_info
+    filename = os.path.basename(file_path)
+    
+    # Get distributed key
+    s3_key = get_distributed_prefix(filename)
+    
+    try:
+        # Upload with metadata
+        s3.upload_file(
+            file_path,
+            bucket,
+            s3_key,
+            ExtraArgs={
+                'ContentType': 'application/octet-stream',
+                'ServerSideEncryption': 'AES256',
+                'Metadata': {
+                    'upload_time': str(int(time.time())),
+                    'original_name': filename
+                }
+            }
+        )
+        return f"Success: {s3_key}"
+    except Exception as e:
+        return f"Error: {filename} - {str(e)}"
+
+def batch_upload(file_list, bucket, max_workers=100):
+    """
+    Upload files in parallel with thread pool
+    50,000 files with 100 workers = ~10 minutes
+    """
+    file_info_list = [(f, bucket) for f in file_list]
+    
+    results = {'success': 0, 'error': 0}
+    start_time = time.time()
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_file = {
+            executor.submit(upload_file_optimized, info): info[0] 
+            for info in file_info_list
+        }
+        
+        for future in concurrent.futures.as_completed(future_to_file):
+            result = future.result()
+            if result.startswith('Success'):
+                results['success'] += 1
+            else:
+                results['error'] += 1
+                print(result)
+            
+            # Progress indicator
+            if (results['success'] + results['error']) % 1000 == 0:
+                elapsed = time.time() - start_time
+                rate = (results['success'] + results['error']) / elapsed
+                print(f"Processed: {results['success'] + results['error']}, Rate: {rate:.0f}/sec")
+    
+    total_time = time.time() - start_time
+    print(f"\nTotal: {results['success']} succeeded, {results['error']} failed in {total_time:.2f}s")
+    print(f"Average rate: {len(file_list)/total_time:.0f} files/second")
+
+# Usage
+import glob
+files = glob.glob('/data/uploads/*.jpg')
+batch_upload(files, 'my-high-throughput-bucket', max_workers=100)
+Solution 4: S3 Transfer Acceleration
+bash# Enable Transfer Acceleration
+aws s3api put-bucket-accelerate-configuration \
+  --bucket my-bucket \
+  --accelerate-configuration Status=Enabled
+
+# Test speed improvement
+aws s3 cp large-file.zip s3://my-bucket/ --endpoint-url https://s3-accelerate.amazonaws.com
+
+# Compare with standard endpoint
+time aws s3 cp large-file.zip s3://my-bucket/  # Standard
+time aws s3 cp large-file.zip s3://my-bucket/ --endpoint-url https://s3-accelerate.amazonaws.com  # Accelerated
+python# Use Transfer Acceleration in code
+s3_accelerated = boto3.client(
+    's3',
+    config=boto3.session.Config(
+        s3={'use_accelerate_endpoint': True}
+    )
+)
+
+# Upload via accelerated endpoint
+s3_accelerated.upload_file(
+    'large-file.zip',
+    'my-bucket',
+    'uploads/large-file.zip'
+)
+Solution 5: Byte-Range Uploads (Custom Implementation)
+pythondef parallel_multipart_upload(file_path, bucket, key, part_size=50*1024*1024):
+    """
+    Custom multipart upload with parallel workers
+    """
+    file_size = os.path.getsize(file_path)
+    num_parts = math.ceil(file_size / part_size)
+    
+    # Initiate multipart upload
+    response = s3.create_multipart_upload(
+        Bucket=bucket,
+        Key=key,
+        ServerSideEncryption='AES256'
+    )
+    upload_id = response['UploadId']
+    
+    def upload_part(part_number, start, end):
+        """Upload single part"""
+        with open(file_path, 'rb') as f:
+            f.seek(start)
+            data = f.read(end - start)
+        
+        response = s3.upload_part(
+            Bucket=bucket,
+            Key=key,
+            PartNumber=part_number,
+            UploadId=upload_id,
+            Body=data
+        )
+        
+        return {
+            'PartNumber': part_number,
+            'ETag': response['ETag']
+        }
+    
+    # Upload parts in parallel
+    parts = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        
+        for part_num in range(1, num_parts + 1):
+            start = (part_num - 1) * part_size
+            end = min(start + part_size, file_size)
+            
+            future = executor.submit(upload_part, part_num, start, end)
+            futures.append(future)
+        
+        for future in concurrent.futures.as_completed(futures):
+            parts.append(future.result())
+    
+    # Sort parts by PartNumber
+    parts.sort(key=lambda x: x['PartNumber'])
+    
+    # Complete multipart upload
+    s3.complete_multipart_upload(
+        Bucket=bucket,
+        Key=key,
+        UploadId=upload_id,
+        MultipartUpload={'Parts': parts}
+    )
+    
+    print(f"Uploaded {file_path} in {num_parts} parts")
+
+# Upload 10GB file
+parallel_multipart_upload('10GB_file.bin', 'my-bucket', 'large/10GB_file.bin')
+Solution 6: CloudFront with S3 for Downloads
+python# Configure CloudFront for read-heavy workloads
+cloudfront_config = {
+    "Origins": [{
+        "DomainName": "my-bucket.s3.amazonaws.com",
+        "OriginPath": "",
+        "CustomHeaders": {},
+        "S3OriginConfig": {
+            "OriginAccessIdentity": "origin-access-identity/cloudfront/ABCDEFG"
+        }
+    }],
+    "DefaultCacheBehavior": {
+        "Compress": True,
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+        "CachedMethods": ["GET", "HEAD"],
+        "ForwardedValues": {
+            "QueryString": False,
+            "Cookies": {"Forward": "none"}
+        },
+        "MinTTL": 0,
+        "DefaultTTL": 86400,  # 24 hours
+        "MaxTTL": 31536000    # 1 year
+    }
+}
+
+# Downloads go through CloudFront (global edge locations)
+# Reduces load on S3
+# Can handle millions of requests per second globally
+Monitoring Performance:
+pythonimport boto3
+from datetime import datetime, timedelta
+
+cloudwatch = boto3.client('cloudwatch')
+
+def monitor_s3_performance(bucket_name):
+    """Monitor S3 request metrics"""
+    
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(hours=1)
+    
+    # Get request metrics
+    response = cloudwatch.get_metric_statistics(
+        Namespace='AWS/S3',
+        MetricName='AllRequests',
+        Dimensions=[
+            {'Name': 'BucketName', 'Value': bucket_name},
+            {'Name': 'FilterId', 'Value': 'EntireBucket'}
+        ],
+        StartTime=start_time,
+        EndTime=end_time,
+        Period=300,  # 5 minutes
+        Statistics=['Sum']
+    )
+    
+    for datapoint in sorted(response['Datapoints'], key=lambda x: x['Timestamp']):
+        requests_per_5min = datapoint['Sum']
+        requests_per_second = requests_per_5min / 300
+        print(f"{datapoint['Timestamp']}: {requests_per_second:.2f} req/s")
+    
+    # Get 4xx/5xx errors
+    for error_code in ['4xxErrors', '5xxErrors']:
+        response = cloudwatch.get_metric_statistics(
+            Namespace='AWS/S3',
+            MetricName=error_code,
+            Dimensions=[
+                {'Name': 'BucketName', 'Value': bucket_name}
+            ],
+            StartTime=start_time,
+            EndTime=end_time,
+            Period=3600,
+            Statistics=['Sum']
+        )
+        
+        if response['Datapoints']:
+            total_errors = response['Datapoints'][0]['Sum']
+            print(f"{error_code}: {total_errors}")
+
+monitor_s3_performance('my-high-throughput-bucket')
+```
+
+**Best Practices Summary:**
+1. **Distribute across prefixes** - Use hash-based prefixes (16^4 = 65K prefixes)
+2. **Multipart uploads** - For files >100MB, use 25-50MB parts
+3. **Parallel operations** - Use ThreadPoolExecutor with 50-100 workers
+4. **Transfer Acceleration** - For global uploads, 50-500% faster
+5. **CloudFront** - For downloads, offload read traffic
+6. **Retry logic** - Exponential backoff for 503 SlowDown errors
+7. **Connection pooling** - Reuse TCP connections
+8. **Monitoring** - Enable S3 Request Metrics in CloudWatch
+
+**Expected Performance:**
+```
+Without optimization: ~100-500 requests/second
+With prefix distribution: 3,500 × N prefixes
+With 100 prefixes: 350,000 requests/second
+With parallel workers: Limited by network/CPU
+```
+
+---
+
+### **8. S3 Event Notifications**
+**Q:** Set up S3 event notifications to trigger Lambda for image processing, SQS for audit logs, and SNS for admin alerts.
+
+**A:**
+
+**Architecture:**
+```
+S3 Bucket Events
+    ├── images/*.jpg → Lambda (resize/watermark)
+    ├── logs/*.log → SQS (audit processing)
+    └── errors/*.error → SNS (admin alerts)
+Step 1: Create Target Services
+bash# Create Lambda function
+aws lambda create-function \
+  --function-name ProcessImages \
+  --runtime python3.11 \
+  --role arn:aws:iam::123456789012:role/LambdaExecutionRole \
+  --handler lambda_function.lambda_handler \
+  --zip-file fileb://function.zip \
+  --timeout 300 \
+  --memory-size 1024
+
+# Create SQS queue
+aws sqs create-queue \
+  --queue-name audit-logs-queue \
+  --attributes '{
+    "VisibilityTimeout": "300",
+    "MessageRetentionPeriod": "1209600"
+  }'
+
+# Create SNS topic
+aws sns create-topic --name admin-alerts
+
+# Subscribe email to SNS
+aws sns subscribe \
+  --topic-arn arn:aws:sns:us-east-1:123456789012:admin-alerts \
+  --protocol email \
+  --notification-endpoint admin@example.com
+Step 2: Grant S3 Permissions
+bash# Lambda permission
+aws lambda add-permission \
+  --function-name ProcessImages \
+  --statement-id s3-invoke-permission \
+  --action lambda:InvokeFunction \
+  --principal s3.amazonaws.com \
+  --source-arn arn:aws:s3:::my-bucket \
+  --source-account 123456789012
+
+# SQS policy
+cat > sqs-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "Service": "s3.amazonaws.com"
+    },
+    "Action": "SQS:SendMessage",
+    "Resource": "arn:aws:sqs:us-east-1:123456789012:audit-logs-queue",
+    "Condition": {
+      "ArnEquals": {
+        "aws:SourceArn": "arn:aws:s3:::my-bucket"
+      }
+    }
+  }]
+}
+EOF
+
+aws sqs set-queue-attributes \
+  --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/audit-logs-queue \
+  --attributes file://sqs-policy.json
+
+# SNS policy
+aws sns set-topic-attributes \
+  --topic-arn arn:aws:sns:us-east-1:123456789012:admin-alerts \
+  --attribute-name Policy \
+  --attribute-value '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Service": "s3.amazonaws.com"},
+      "Action": "SNS:Publish",
+      "Resource": "arn:aws:sns:us-east-1:123456789012:admin-alerts",
+      "Condition": {
+        "ArnEquals": {
+          "aws:SourceArn": "arn:aws:s3:::my-bucket"
+        }
+      }
+    }]
+  }'
+Step 3: Configure S3 Event Notifications
+bashcat > notification-config.json <<EOF
+{
+  "LambdaFunctionConfigurations": [
+    {
+      "Id": "ImageProcessing",
+      "LambdaFunctionArn": "arn:aws:lambda:us-east-1:123456789012:function:ProcessImages",
+      "Events": ["s3:ObjectCreated:*"],
+      "Filter": {
+        "Key": {
+          "FilterRules": [
+            {"Name": "prefix", "Value": "images/"},
+            {"Name": "suffix", "Value": ".jpg"}
+          ]
+        }
+      }
+    }
+  ],
+  "QueueConfigurations": [
+    {
+      "Id": "AuditLogs",
+      "QueueArn": "arn:aws:sqs:us-east-1:123456789012:audit-logs-queue",
+      "Events": ["s3:ObjectCreated:*", "s3:ObjectRemoved:*"],
+      "Filter": {
+        "Key": {
+          "FilterRules": [
+            {"Name": "prefix", "Value": "logs/"},
+            {"Name": "suffix", "Value": ".log"}
+          ]
+        }
+      }
+    }
+  ],
+  "TopicConfigurations": [
+    {
+      "Id": "ErrorAlerts",
+      "TopicArn": "arn:aws:sns:us-east-1:123456789012:admin-alerts",
+      "Events": ["s3:ObjectCreated:*"],
+      "Filter": {
+        "Key": {
+          "FilterRules": [
+            {"Name": "prefix", "Value": "errors/"},
+            {"Name": "suffix", "Value": ".error"}
+          ]
+        }
+      }
+    }
+  ]
+}
+EOF
+
+aws s3api put-bucket-notification-configuration \
+  --bucket my-bucket \
+  --notification-configuration file://notification-config.json
+Step 4: Lambda Function for Image Processing
+pythonimport boto3
+import os
+from PIL import Image
+import io
+from urllib.parse import unquote_plus
+
+s3 = boto3.client('s3')
+
+def lambda_handler(event, context):
+    """
+    Process uploaded images: resize and create thumbnail
+    """
+    for record in event['Records']:
+        # Get bucket and key
+        bucket = record['s3']['bucket']['name']
+        key = unquote_plus(record['s3']['object']['key'])
+        
+        print(f"Processing: s3://{bucket}/{key}")
+        
+        try:
+            # Download image
+            response = s3.get_object(Bucket=bucket, Key=key)
+            image_data = response['Body'].read()
+            
+            # Open with PIL
+            image = Image.open(io.BytesIO(image_data))
+            original_format = image.format
+            
+            # Create thumbnail (200x200)
+            thumbnail = image.copy()
+            thumbnail.thumbnail((200, 200), Image.LANCZOS)
+            
+            # Save thumbnail
+            thumb_buffer = io.BytesIO()
+            thumbnail.save(thumb_buffer, format=original_format, quality=85)
+            thumb_buffer.seek(0)
+            
+            # Upload thumbnail
+            thumb_key = key.replace('images/', 'thumbnails/')
+            s3.put_object(
+                Bucket=bucket,
+                Key=thumb_key,
+                Body=thumb_buffer,
+                ContentType=response['ContentType'],
+                Metadata={
+                    'original-key': key,
+                    'processed-by': 'lambda'
+                }
+            )
+            
+            print(f"Created thumbnail: {thumb_key}")
+            
+            # Optionally: Resize original for web
+            if image.width > 1920 or image.height > 1080:
+                image.thumbnail((1920, 1080), Image.LANCZOS)
+                
+                web_buffer = io.BytesIO()
+                image.save(web_buffer, format=original_format, quality=90, optimize=True)
+                web_buffer.seek(0)
+                
+                # Upload web version
+                web_key = key.replace('images/', 'web/')
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=web_key,
+                    Body=web_buffer,
+                    ContentType=response['ContentType']
+                )
+                
+                print(f"Created web version: {web_key}")
+            
+            # Tag original as processed
+            s3.put_object_tagging(
+                Bucket=bucket,
+                Key=key,
+                Tagging={
+                    'TagSet': [
+                        {'Key': 'processed', 'Value': 'true'},
+                        {'Key': 'processed-date', 'Value': context.log_stream_name}
+                    ]
+                }
+            )
+            
+        except Exception as e:
+            print(f"Error processing {key}: {str(e)}")
+            
+            # Send error to DLQ or SNS
+            sns = boto3.client('sns')
+            sns.publish(
+                TopicArn='arn:aws:sns:us-east-1:123456789012:admin-alerts',
+                Subject='Image Processing Failed',
+                Message=f"Failed to process {key}: {str(e)}"
+            )
+            
+            raise
+    
+    return {'statusCode': 200, 'body': 'Processing complete'}
+Step 5: SQS Consumer for Audit Logs
+pythonimport boto3
+import json
+
+sqs = boto3.client('sqs')
+queue_url = 'https://sqs.us-east-1.amazonaws.com/123456789012/audit-logs-queue'
+
+def process_audit_logs():
+    """
+    Poll SQS and process S3 events
+    """
+    while True:
+        # Receive messages
+        response = sqs.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=10,
+            WaitTimeSeconds=20,  # Long polling
+            AttributeNames=['All'],
+            MessageAttributeNames=['All']
+        )
+        
+        messages = response.get('Messages', [])
+        
+        if not messages:
+            print("No messages")
+            continue
+        
+        for message in messages:
+            try:
+                # Parse S3 event
+                body = json.loads(message['Body'])
+                
+                for record in body['Records']:
+                    event_name = record['eventName']
+                    bucket = record['s3']['bucket']['name']
+                    key = record['s3']['object']['key']
+                    size = record['s3']['object'].get('size', 0)
+                    
+                    # Log to database/CloudWatch
+                    print(f"Event: {event_name}")
+                    print(f"Object: s3://{bucket}/{key}")
+                    print(f"Size: {size} bytes")
+                    
+                    # Store in DynamoDB for audit trail
+                    dynamodb = boto3.resource('dynamodb')
+                    table = dynamodb.Table('s3-audit-trail')
+                    
+                    table.put_item(
+                        Item={
+                            'object_key': key,
+                            'event_time': record['eventTime'],
+                            'event_name': event_name,
+                            'bucket': bucket,
+                            'size': size,
+                            'user_identity': record.get('userIdentity', {}).get('principalId', 'unknown'),
+                            'source_ip': record.get('requestParameters', {}).get('sourceIPAddress', 'unknown')
+                        }
+                    )
+                
+                # Delete message from queue
+                sqs.delete_message(
+                    QueueUrl=queue_url,
+                    ReceiptHandle=message['ReceiptHandle']
+                )
+                
+            except Exception as e:
+                print(f"Error processing message: {e}")
+                # Message will become visible again for retry
+
+if __name__ == '__main__':
+    process_audit_logs()
+Step 6: Advanced - Using EventBridge Instead
+bash# Enable EventBridge notifications
+aws s3api put-bucket-notification-configuration \
+  --bucket my-bucket \
+  --notification-configuration '{
+    "EventBridgeConfiguration": {}
+  }'
+EventBridge Rule:
+json{
+  "Source": ["aws.s3"],
+  "DetailType": ["Object Created"],
+  "Detail": {
+    "bucket": {
+      "name": ["my-bucket"]
+    },
+    "object": {
+      "key": [{
+        "prefix": "images/"
+      }]
+    }
+  }
+}
+EventBridge Targets (More Flexible):
+bash# Create EventBridge rule
+aws events put-rule \
+  --name s3-image-uploads \
+  --event-pattern file://event-pattern.json \
+  --state ENABLED
+
+# Add multiple targets
+aws events put-targets \
+  --rule s3-image-uploads \
+  --targets \
+    Id=1,Arn=arn:aws:lambda:us-east-1:123456789012:function:ProcessImages \
+    Id=2,Arn=arn:aws:states:us-east-1:123456789012:stateMachine:ImageWorkflow \
+    Id=3,Arn=arn:aws:sqs:us-east-1:123456789012:image-processing-queue
+```
+
+**Benefits of EventBridge over Direct S3 Notifications:**
+- Multiple targets (up to 5) per rule
+- Content filtering (can filter on object size, tags, etc.)
+- Cross-region/cross-account targets
+- Easier to add/remove targets
+- Better for event-driven architectures
+
+---
+
+### **9. S3 Access Points**
+**Q:** You have a single S3 bucket shared by multiple teams. Design access control using S3 Access Points.
+
+**A:**
+
+**Scenario:**
+```
+Single Bucket: company-data
+  ├── finance/      (Finance team only)
+  ├── hr/           (HR team only)
+  ├── engineering/  (Engineering team only)
+  └── shared/       (All teams, read-only)
+Traditional Approach (Complex Bucket Policy):
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::123456789012:role/FinanceRole"},
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::company-data/finance/*"
+    },
+    {
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::123456789012:role/HRRole"},
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::company-data/hr/*"
+    }
+    // ... becomes unmanageable
+  ]
+}
+Better Approach with Access Points:
+Step 1: Create Access Points
+bash# Finance Access Point
+aws s3control create-access-point \
+  --account-id 123456789012 \
+  --name finance-ap \
+  --bucket company-data \
+  --vpc-configuration VpcId=vpc-12345678
+
+# HR Access Point
+aws s3control create-access-point \
+  --account-id 123456789012 \
+  --name hr-ap \
+  --bucket company-data \
+  --vpc-configuration VpcId=vpc-12345678
+
+# Engineering Access Point
+aws s3control create-access-point \
+  --account-id 123456789012 \
+  --name engineering-ap \
+  --bucket company-data
+
+# Shared (read-only) Access Point
+aws s3control create-access-point \
+  --account-id 123456789012 \
+  --name shared-ap \
+  --bucket company-data
+Step 2: Configure Access Point Policies
+pythonimport boto3
+import json
+
+s3control = boto3.client('s3control')
+account_id = '123456789012'
+
+# Finance Access Point Policy
+finance_policy = {
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": "arn:aws:iam::123456789012:role/FinanceRole"
+        },
+        "Action": "s3:*",
+        "Resource": f"arn:aws:s3:{region}:{account_id}:accesspoint/finance-ap/object/finance/*"
+    }]
+}
+
+s3control.put_access_point_policy(
+    AccountId=account_id,
+    Name='finance-ap',
+    Policy=json.dumps(finance_policy)
+)
+
+# HR Access Point Policy
+hr_policy = {
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": "arn:aws:iam::123456789012:role/HRRole"
+        },
+        "Action": "s3:*",
+        "Resource": f"arn:aws:s3:{region}:{account_id}:accesspoint/hr-ap/object/hr/*"
+    }]
+}
+
+s3control.put_access_point_policy(
+    AccountId=account_id,
+    Name='hr-ap',
+    Policy=json.dumps(hr_policy)
+)
+
+# Shared Access Point Policy (Read-Only)
+shared_policy = {
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": [
+                "arn:aws:iam::123456789012:role/FinanceRole",
+                "arn:aws:iam::123456789012:role/HRRole",
+                "arn:aws:iam::123456789012:role/EngineeringRole"
+            ]
+        },
+        "Action": [
+            "s3:GetObject",
+            "s3:ListBucket"
+        ],
+        "Resource": [
+            f"arn:aws:s3:{region}:{account_id}:accesspoint/shared-ap",
+            f"arn:aws:s3:{region}:{account_id}:accesspoint/shared-ap/object/shared/*"
+        ]
+    }]
+}
+
+s3control.put_access_point_policy(
+    AccountId=account_id,
+    Name='shared-ap',
+    Policy=json.dumps(shared_policy)
+)
+Step 3: Simplified Bucket Policy
+json{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"AWS": "*"},
+    "Action": "*",
+    "Resource": [
+      "arn:aws:s3:::company-data",
+      "arn:aws:s3:::company-data/*"
+    ],
+    "Condition": {
+      "StringEquals": {
+        "s3:DataAccessPointAccount": "123456789012"
+      }
+    }
+  }]
+}
+Step 4: Using Access Points in Applications
+pythonimport boto3
+
+# Finance team uses finance-ap
+s3_finance = boto3.client('s3')
+
+# Upload via Access Point
+s3_finance.put_object(
+    Bucket='arn:aws:s3:us-east-1:123456789012:accesspoint/finance-ap',
+    Key='finance/Q4-report.pdf',
+    Body=open('Q4-report.pdf', 'rb')
+)
+
+# List objects via Access Point
+response = s3_finance.list_objects_v2(
+    Bucket='arn:aws:s3:us-east-1:123456789012:accesspoint/finance-ap',
+    Prefix='finance/'
+)
+
+for obj in response.get('Contents', []):
+    print(obj['Key'])
+
+# Download via Access Point
+response = s3_finance.get_object(
+    Bucket='arn:aws:s3:us-east-1:123456789012:accesspoint/finance-ap',
+    Key='finance/Q4-report.pdf'
+)
+data = response['Body'].read()
+Step 5: VPC-Only Access Points
+bash# Create VPC endpoint for S3
+aws ec2 create-vpc-endpoint \
+  --vpc-id vpc-12345678 \
+  --service-name com.amazonaws.us-east-1.s3 \
+  --route-table-ids rtb-12345678
+
+# Access Point restricted to VPC
+cat > finance-ap-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Deny",
+    "Principal": "*",
+    "Action": "s3:*",
+    "Resource": "arn:aws:s3:us-east-1:123456789012:accesspoint/finance-ap/*",
+    "Condition": {
+      "StringNotEquals": {
+        "aws:SourceVpc": "vpc-12345678"
+      }
+    }
+  }]
+}
+EOF
+
+aws s3control put-access-point-policy \
+  --account-id 123456789012 \
+  --name finance-ap \
+  --policy file://finance-ap-policy.json
+Step 6: Cross-Account Access Points
+bash# Create Access Point in Account A
+aws s3control create-access-point \
+  --account-id 111111111111 \
+  --name partner-access \
+  --bucket shared-data
+
+# Access Point Policy (allow Account B)
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "AWS": "arn:aws:iam::222222222222:root"
+    },
+    "Action": ["s3:GetObject", "s3:ListBucket"],
+    "Resource": [
+      "arn:aws:s3:us-east-1:111111111111:accesspoint/partner-access",
+      "arn:aws:s3:us-east-1:111111111111:accesspoint/partner-access/object/*"
+    ]
+  }]
+}
+
+# IAM Policy in Account B
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["s3:GetObject", "s3:ListBucket"],
+    "Resource": [
+      "arn:aws:s3:us-east-1:111111111111:accesspoint/partner-access",
+      "arn:aws:s3:us-east-1:111111111111:accesspoint/partner-access/object/*"
+    ]
+  }]
+}
+Step 7: Access Point Aliases
+python# Get Access Point alias (easier to remember)
+response = s3control.get_access_point(
+    AccountId='123456789012',
+    Name='finance-ap'
+)
+
+alias = response['Alias']
+print(f"Alias: {alias}")  # e.g., finance-ap-s3alias
+
+# Use alias instead of full ARN
+s3.put_object(
+    Bucket=f"{alias}-s3alias.s3-accesspoint.us-east-1.amazonaws.com",
+    Key='finance/report.pdf',
+    Body=open('report.pdf', 'rb')
+)
+Benefits of Access Points:
+
+Simplified Management - One policy per access point vs. one complex bucket policy
+Scalability - Up to 10,000 access points per bucket
+Isolation - Each team has its own endpoint
+VPC Restrictions - Network-level isolation
+Delegated Administration - Teams can manage their own access points
+Easier Auditing - CloudTrail logs show which access point was used
+
+Monitoring Access Points:
+pythondef monitor_access_point_usage():
+    """Track access patterns per access point"""
+    
+    cloudwatch = boto3.client('cloudwatch')
+    
+    # Get metrics for each access point
+    response = cloudwatch.get_metric_statistics(
+        Namespace='AWS/S3',
+        MetricName='AllRequests',
+        Dimensions=[
+            {'Name': 'AccessPointName', 'Value': 'finance-ap'},
+            {'Name': 'BucketName', 'Value': 'company-data'}
+        ],
+        StartTime=datetime.utcnow() - timedelta(hours=24),
+        EndTime=datetime.utcnow(),
+        Period=3600,
+        Statistics=['Sum']
+    )
+    
+    print("Finance Access Point Requests (last 24h):")
+    for datapoint in response['Datapoints']:
+        print(f"{datapoint['Timestamp']}: {datapoint['Sum']} requests")
+
+monitor_access_point_usage()
+
+10. S3 Batch Operations
+Q: You need to restore 10 million objects from Glacier, change storage class, and add tags. Design an efficient solution.
+A:
+Problem:
+
+Manual operations on millions of objects is impractical
+API rate limits (3,500 writes/sec per prefix)
+Cost of individual API calls
+Need progress tracking and error handling
+
+Solution: S3 Batch Operations
+Step 1: Create S3 Inventory
+bash# Configure inventory
+cat > inventory-config.json <<EOF
+{
+  "Destination": {
+    "S3BucketDestination": {
+      "AccountId": "123456789012",
+      "Bucket": "arn:aws:s3:::inventory-bucket",
+      "Format": "CSV",
+      "Prefix": "inventory/"
+    }
+  },
+  "IsEnabled": true,
+  "Filter": {
+    "Prefix": "archive/"
+  },
+  "Id": "glacier-objects",
+  "IncludedObjectVersions": "Current",
+  "OptionalFields": [
+    "Size",
+    "LastModifiedDate",
+    "StorageClass",
+    "ETag",
+    "IsMultipartUploaded",
+    "ReplicationStatus"
+  ],
+  "Schedule": {
+    "Frequency": "Daily"
+  }
+}
+EOF
+
+aws s3api put-bucket-inventory-configuration \
+  --bucket source-bucket \
+  --id glacier-objects \
+  --inventory-configuration file://inventory-config.json
+Step 2: Restore from Glacier (Batch Restore)
+pythonimport boto3
+import json
+from datetime import datetime
+
+s3control = boto3.client('s3control')
+account_id = '123456789012'
+
+def create_batch_restore_job(manifest_location, bucket):
+    """
+    Batch restore objects from Glacier
+    """
+    
+    job_config = {
+        'Manifest': {
+            'Spec': {
+                'Format': 'S3InventoryReport_CSV_20211130',
+                'Fields': ['Bucket', 'Key']
+            },
+            'Location': {
+                'ObjectArn': manifest_location,
+                'ETag': 'manifest-etag'
+            }
+        },
+        'Operation': {
+            'S3InitiateRestoreObject': {
+                'ExpirationInDays': 7,  # Keep restored copy for 7 days
+                'GlacierJobTier': 'STANDARD'  # STANDARD, BULK, or EXPEDITED
+            }
+        },
+        'Report': {
+            'Bucket': f'arn:aws:s3:::batch-reports',
+            'Format': 'Report_CSV_20180820',
+            'Enabled': True,
+            'Prefix': 'restore-job/',
+            'ReportScope': 'AllTasks'  # or 'FailedTasksOnly'
+        },
+        'Priority': 10,
+        'RoleArn': 'arn:aws:iam::123456789012:role/S3BatchOperationsRole',
+        'ConfirmationRequired': False,  # Set to True for review before execution
+        'Description': f'Batch restore from Glacier - {datetime.now().isoformat()}'
+    }
+    
+    response = s3control.create_job(
+        AccountId=account_id,
+        **job_config
+    )
+    
+    job_id = response['JobId']
+    print(f"Created batch restore job: {job_id}")
+    return job_id
+
+# Create job
+manifest_arn = 'arn:aws:s3:::inventory-bucket/inventory/source-bucket/glacier-objects/2025-01-01T00-00Z/manifest.json'
+job_id = create_batch_restore_job(manifest_arn, 'source-bucket')
+Step 3: Change Storage Class (After Restore)
+pythondef create_batch_storage_class_job(manifest_location, target_storage_class='INTELLIGENT_TIERING'):
+    """
+    Change storage class for millions of objects
+    """
+    
+    job_config = {
+        'Manifest': {
+            'Spec': {
+                'Format': 'S3InventoryReport_CSV_20211130',
+                'Fields': ['Bucket', 'Key']
+            },
+            'Location': {
+                'ObjectArn': manifest_location,
+                'ETag': 'manifest-etag'
+            }
+        },
+        'Operation': {
+            'S3PutObjectCopy': {
+                'TargetResource': 'arn:aws:s3:::source-bucket',
+                'StorageClass': target_storage_class,
+                'MetadataDirective': 'COPY',  # Keep existing metadata
+                'CannedAccessControlList': 'private',
+                'RequesterPays': False
+            }
+        },
+        'Report': {
+            'Bucket': f'arn:aws:s3:::batch-reports',
+            'Format': 'Report_CSV_20180820',
+            'Enabled': True,
+            'Prefix': 'storage-class-job/',
+            'ReportScope': 'AllTasks'
+        },
+        'Priority': 10,
+        'RoleArn': 'arn:aws:iam::123456789012:role/S3BatchOperationsRole',
+        'ConfirmationRequired': False,
+        'Description': f'Change to {target_storage_class}'
+    }
+    
+    response = s3control.create_job(
+        AccountId=account_id,
+        **job_config
+    )
+    
+    return response['JobId']
+
+# Execute
+job_id = create_batch_storage_class_job(manifest_arn, 'INTELLIGENT_TIERING')
+Step 4: Add Tags (Batch Tagging)
+pythondef create_batch_tagging_job(manifest_location, tags):
+    """
+    Add tags to millions of objects
+    """
+    
+    tag_set = [{'Key': k, 'Value': v} for k, v in tags.items()]
+    
+    job_config = {
+        'Manifest': {
+            'Spec': {
+                'Format': 'S3InventoryReport_CSV_20211130',
+                'Fields': ['Bucket', 'Key']
+            },
+            'Location': {
+                'ObjectArn': manifest_location,
+                'ETag': 'manifest-etag'
+            }
+        },
+        'Operation': {
+            'S3PutObjectTagging': {
+                'TagSet': tag_set
+            }
+        },
+        'Report': {
+            'Bucket': f'arn:aws:s3:::batch-reports',
+            'Format': 'Report_CSV_20180820',
+            'Enabled': True,
+            'Prefix': 'tagging-job/',
+            'ReportScope': 'AllTasks'
+        },
+        'Priority': 10,
+        'RoleArn': 'arn:aws:iam::123456789012:role/S3BatchOperationsRole',
+        'ConfirmationRequired': False,
+        'Description': 'Batch tagging operation'
+    }
+    
+    response = s3control.create_job(
+        AccountId=account_id,
+        **job_config
+    )
+    
+    return response['JobId']
+
+# Add tags
+tags = {
+    'Environment': 'Production',
+    'DataClassification': 'Confidential',
+    'RetentionPeriod': '7years',
+    'RestoreDate': datetime.now().strftime('%Y-%m-%d')
+}
+
+job_id = create_batch_tagging_job(manifest_arn, tags)
+Step 5: Monitor Batch Jobs
+pythondef monitor_batch_job(job_id):
+    """Monitor batch job progress"""
+    
+    while True:
+        response = s3control.describe_job(
+            AccountId=account_id,
+            JobId=job_id
+        )
+        
+        job = response['Job']
+        status = job['Status']
+        
+        print(f"\nJob ID: {job_id}")
+        print(f"Status: {status}")
+        
+        if 'ProgressSummary' in job:
+            progress = job['ProgressSummary']
+            print(f"Total Objects: {progress.get('TotalNumberOfTasks', 0)}")
+            print(f"Succeeded: {progress.get('NumberOfTasksSucceeded', 0)}")
+            print(f"Failed: {progress.get('NumberOfTasksFailed', 0)}")
+            
+            if progress.get('TotalNumberOfTasks', 0) > 0:
+                percent = (progress.get('NumberOfTasksSucceeded', 0) / 
+                          progress.get('TotalNumberOfTasks', 1)) * 100
+                print(f"Progress: {percent:.2f}%")
+        
+        if status in ['Complete', 'Failed', 'Cancelled']:
+            break
+        
+        time.sleep(60)  # Check every minute
+    
+    # Download completion report
+    if status == 'Complete':
+        report_key = job['Report']['ReportPrefix'] + '/job-report.csv'
+        print(f"\nDownload report: s3://batch-reports/{report_key}")
+
+monitor_batch_job(job_id)
+Step 6: IAM Role for Batch Operations
+json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::source-bucket/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectTagging",
+        "s3:PutObjectAcl",
+        "s3:RestoreObject"
+      ],
+      "Resource": "arn:aws:s3:::source-bucket/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::inventory-bucket/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::batch-reports/*"
+    }
+  ]
+}
+Step 7: Cost Estimation
+pythondef estimate_batch_operation_cost(num_objects, operation_type):
+    """
+    Estimate cost of batch operation
+    """
+    costs = {
+        'restore_standard': 0.01,  # per 1000 objects
+        'restore_bulk': 0.0025,    # per 1000 objects
+        'restore_expedited': 0.03, # per 1000 objects
+        'copy': 0.005,             # per 1000 objects
+        'tagging': 0.0025          # per 1000 objects
+    }
+    
+    cost_per_thousand = costs.get(operation_type, 0)
+    total_cost = (num_objects / 1000) * cost_per_thousand
+    
+    print(f"Operation: {operation_type}")
+    print(f"Objects: {num_objects:,}")
+    print(f"Estimated Cost: ${total_cost:.2f}")
+    
+    return total_cost
+
+# For 10 million objects
+estimate_batch_operation_cost(10_000_000, 'restore_standard')  # $100
+estimate_batch_operation_cost(10_000_000, 'copy')              # $50
+estimate_batch_operation_cost(10_000_000, 'tagging')           # $25
+# Total: ~$175 for all operations
+Step 8: Custom Manifest (Selective Operations)
+pythondef create_custom_manifest(bucket, prefix, filter_func):
+    """
+    Create custom manifest for selective operations
+    """
+    s3 = boto3.client('s3')
+    
+    # List objects
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+    
+    manifest_lines = []
+    
+    for page in pages:
+        for obj in page.get('Contents', []):
+            # Apply custom filter
+            if filter_func(obj):
+                # Add to manifest
+                manifest_lines.append(f"{bucket},{obj['Key']}\n")
+    
+    # Upload manifest
+    manifest_content = ''.join(manifest_lines)
+    manifest_key = f"manifests/custom-manifest-{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    
+    s3.put_object(
+        Bucket='inventory-bucket',
+        Key=manifest_key,
+        Body=manifest_content.encode('utf-8')
+    )
+    
+    print(f"Created manifest with {len(manifest_lines)} objects")
+    return f"arn:aws:s3:::inventory-bucket/{manifest_key}"
+
+# Example: Only restore objects larger than 100MB
+def size_filter(obj):
+    return obj['Size'] > 100 * 1024 * 1024
+
+custom_manifest_arn = create_custom_manifest('source-bucket', 'archive/', size_filter)
+Benefits of S3 Batch Operations:
+
+Scale - Process billions of objects
+Parallel - AWS handles parallelization
+Reliable - Built-in retry logic
+Auditable - Detailed completion reports
+Cost-effective - Bulk pricing ($0.25 per million objects)
+Managed - No infrastructure to manage
+
+
+This completes the first 10 basic-level questions for S3. Would you like me to continue with:
+
+Questions 11-20 (Intermediate Level) covering topics like Cross-Region Replication, Object Lambda, Presigned URLs, S3 Select, Multi-Region Access Points, etc.?
+Questions 21-30 (Advanced Level) covering S3 Batch Operations at scale, Advanced security, Compliance, Cost optimization strategies, etc.?
